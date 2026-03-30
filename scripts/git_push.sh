@@ -2,7 +2,7 @@
 cd /config
 LOG="/config/www/git_push.log"
 
-export GIT_SSH_COMMAND="ssh -i /root/.ssh/ha_github -o StrictHostKeyChecking=accept-new"
+export GIT_SSH_COMMAND="ssh -i /config/.ssh/ha_github -o StrictHostKeyChecking=accept-new"
 
 echo "$(date '+%Y-%m-%d %H:%M:%S') - START" > "$LOG"
 
