@@ -1,0 +1,23 @@
+=============================================
+  EV NABIJANIE - MESACNY REPORT 2026-03
+=============================================
+
+  Sessions:    59
+  Energia:     611.355 kWh
+    prebytky:  0.000 kWh (0.0%)
+    siet:      0.000 kWh
+  Naklady:     53.787 EUR (len siet)
+  Uspora:      0.000 EUR (prebytky)
+  Cas:         7443 min (124.0 h)
+
+--- Pouzivatelia ---
+  mysan: 53x, 523.033 kWh (prebytky: 0.000), 47.647 EUR
+  vojtesla: 6x, 88.322 kWh (prebytky: 0.000), 6.140 EUR
+
+--- Tarify ---
+  T1: 13x, 268.807 kWh (prebytky: 0.000), 32.538 EUR
+  T2: 9x, 100.491 kWh (prebytky: 0.000), 15.160 EUR
+  T3: 3x, 10.508 kWh (prebytky: 0.000), 1.960 EUR
+  T4: 11x, 18.512 kWh (prebytky: 0.000), 3.638 EUR
+  unavailable: 6x, 32.261 kWh (prebytky: 0.000), 0.000 EUR
+  unknown: 17x, 180.776 kWh (prebytky: 0.000), 0.491 EUR

@@ -1,0 +1,136 @@
+# AKVÁRIUM - Script pre ovládanie svetla
+# Pridaj tieto riadky do existujúceho scripts.yaml súboru
+
+aquarium_light_control:
+  alias: "Akvárium - Ovládanie svetla"
+  mode: restart
+  fields:
+    brightness:
+      description: "Jas svetla (0-255)"
+      example: 255
+    color_temp:
+      description: "Teplota farieb (mired)"  
+      example: 250
+    transition:
+      description: "Prechod v sekundách"
+      example: 300
+    slot_name:
+      description: "Názov slotu pre log"
+      example: "Slot 1"
+  sequence:
+    # Kontrola či nie je manual override
+    - condition: state
+      entity_id: input_boolean.aquarium_manual_override
+      state: 'off'
+    
+    # Uložiť hodnoty do pamäte
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.aquarium_last_brightness
+      data:
+        value: "{{ brightness | int }}"
+    
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.aquarium_last_color_temp
+      data:
+        value: "{{ color_temp | int }}"
+    
+    # Log
+    - service: logbook.log
+      data:
+        name: "Akvárium"
+        message: "{{ slot_name }}: Jas {{ brightness }}, Teplota {{ color_temp }} mired, Prechod {{ transition }}s"
+        entity_id: light.led_ccww_controller
+    
+    # Vykonať zmenu
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ brightness | int == 0 }}"
+          sequence:
+            - service: light.turn_off
+              target:
+                entity_id: light.led_ccww_controller
+              data:
+                transition: "{{ transition | int }}"
+      default:
+        - service: light.turn_on
+          target:
+            entity_id: light.led_ccww_controller
+          data:
+            brightness: "{{ brightness | int }}"
+            color_temp: "{{ color_temp | int }}"
+            transition: "{{ transition | int }}"
+
+# NOVÝ SCRIPT - Obnova po reštarte
+aquarium_restore_state:
+  alias: "Akvárium - Obnova stavu po reštarte"
+  mode: single
+  sequence:
+    - condition: state
+      entity_id: light.led_ccww_controller
+      state: 'on'
+    
+    - service: light.turn_on
+      target:
+        entity_id: light.led_ccww_controller
+      data:
+        brightness: "{{ states('input_number.aquarium_last_brightness') | int }}"
+        color_temp: "{{ states('input_number.aquarium_last_color_temp') | int }}"
+        transition: 5
+        
+# VETRANIE - Script pre ovládanie stupňov
+# Pridaj do scripts.yaml
+#
+# Logika: stupeň 0-8 → napätie 1V-9V
+#   brightness = (stupeň + 1) × 25.4  (zaokrúhlené)
+#   0→25, 1→51, 2→76, 3→102, 4→127, 5→152, 6→178, 7→203, 8→229
+
+vetranie_nastav_stupen:
+  alias: "Vetranie - Nastav stupeň (0-8)"
+  mode: restart
+  fields:
+    stupen:
+      description: "Stupeň vetrania (0=1V … 8=9V)"
+      example: 4
+  sequence:
+    - service: light.turn_on
+      target:
+        entity_id: light.dimdc_vetranie1
+      data:
+        brightness: "{{ ((stupen | int + 1) * 25.4) | round | int }}"
+
+    - service: input_number.set_value
+      target:
+        entity_id: input_number.vetranie_stupen
+      data:
+        value: "{{ stupen | int }}"
+
+
+# Zvýš stupeň o 1 (max 8)
+vetranie_stupen_hore:
+  alias: "Vetranie - Stupeň hore"
+  mode: single
+  sequence:
+    - variables:
+        aktualny: "{{ states('input_number.vetranie_stupen') | int }}"
+    - condition: template
+      value_template: "{{ aktualny < 8 }}"
+    - service: script.vetranie_nastav_stupen
+      data:
+        stupen: "{{ aktualny + 1 }}"
+
+
+# Znížiť stupeň o 1 (min 0)
+vetranie_stupen_dole:
+  alias: "Vetranie - Stupeň dole"
+  mode: single
+  sequence:
+    - variables:
+        aktualny: "{{ states('input_number.vetranie_stupen') | int }}"
+    - condition: template
+      value_template: "{{ aktualny > 0 }}"
+    - service: script.vetranie_nastav_stupen
+      data:
+        stupen: "{{ aktualny - 1 }}"

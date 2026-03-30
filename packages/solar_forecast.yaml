@@ -1,0 +1,351 @@
+# ============================================
+# SOLAR FORECAST - PREDPOVEĎ VÝROBY FVE
+# Package pre Home Assistant
+# ============================================
+# Pridaj do configuration.yaml:
+#   homeassistant:
+#     packages:
+#       solar_forecast: !include packages/solar_forecast.yaml
+# ============================================
+#
+# ZDROJE PREDPOVEDE:
+#
+# 1. Open-Meteo Solar Forecast (HACS) - integrácia "Home"
+#    - Zadarmo, žiadne API limity
+#    - Entity prefix: sensor.home_*
+#
+# 2. Solcast PV Forecast (HACS) - integrácia "solcast"
+#    - Presnejší (satelitné dáta), 10 API volaní/deň
+#    - Entity prefix: sensor.solcast_*
+#
+# Prepínanie: input_select.solar_forecast_source
+# ============================================
+
+# ================================
+# INPUT HELPERS
+# ================================
+
+input_select:
+  solar_forecast_source:
+    name: "FVE - Zdroj predpovede"
+    options:
+      - "open_meteo"
+      - "solcast"
+    initial: "solcast"
+    icon: mdi:swap-horizontal
+
+input_number:
+  solar_forecast_ev_threshold:
+    name: "FVE - Prah pre nočné nabíjanie EV (kWh)"
+    min: 0
+    max: 50
+    step: 0.5
+    initial: 5
+    unit_of_measurement: "kWh"
+    icon: mdi:solar-power-variant
+    mode: slider
+
+  solar_forecast_bojler_threshold:
+    name: "FVE - Prah pre nočný ohrev bojlera (kWh)"
+    min: 0
+    max: 50
+    step: 0.5
+    initial: 8
+    unit_of_measurement: "kWh"
+    icon: mdi:water-boiler-alert
+
+input_boolean:
+  solar_forecast_ev_enabled:
+    name: "FVE - Smart nabíjanie EV podľa predpovede"
+    icon: mdi:car-electric-outline
+
+  solar_forecast_bojler_enabled:
+    name: "FVE - Smart bojler podľa predpovede"
+    icon: mdi:water-boiler
+
+# ================================
+# TEMPLATE SENSORS
+# ================================
+#
+# Solcast entity (integrácia "solcast"):
+#   sensor.solcast_forecast_today
+#   sensor.solcast_forecast_tomorrow
+#   sensor.solcast_forecast_remaining_today
+#   sensor.solcast_forecast_this_hour
+#   sensor.solcast_forecast_next_hour
+#   sensor.solcast_peak_forecast_today
+#   sensor.solcast_peak_forecast_tomorrow
+#   sensor.solcast_api_used
+#   sensor.solcast_api_limit
+#   sensor.solcast_api_last_polled
+#
+# Open-Meteo entity (integrácia "Home"):
+#   sensor.home_energy_production_today
+#   sensor.home_energy_production_tomorrow
+#   sensor.home_power_production_now
+#   sensor.home_energy_next_hour
+#   sensor.home_peak_power_today
+#   sensor.home_peak_power_tomorrow
+
+template:
+  - sensor:
+      # === ENERGIA (kWh) ===
+
+      - name: "Solar Forecast Today"
+        unique_id: solar_forecast_today
+        state: >
+          {% set src = states('input_select.solar_forecast_source') %}
+          {% if src == 'solcast' %}
+            {{ states('sensor.solcast_forecast_today') | float(0) | round(2) }}
+          {% else %}
+            {{ states('sensor.home_energy_production_today') | float(0) | round(2) }}
+          {% endif %}
+        unit_of_measurement: "kWh"
+        device_class: energy
+        icon: mdi:solar-power
+        attributes:
+          source: "{{ states('input_select.solar_forecast_source') }}"
+
+      - name: "Solar Forecast Tomorrow"
+        unique_id: solar_forecast_tomorrow
+        state: >
+          {% set src = states('input_select.solar_forecast_source') %}
+          {% if src == 'solcast' %}
+            {{ states('sensor.solcast_forecast_tomorrow') | float(0) | round(2) }}
+          {% else %}
+            {{ states('sensor.home_energy_production_tomorrow') | float(0) | round(2) }}
+          {% endif %}
+        unit_of_measurement: "kWh"
+        device_class: energy
+        icon: mdi:solar-power-variant
+        attributes:
+          source: "{{ states('input_select.solar_forecast_source') }}"
+
+      - name: "Solar Forecast Remaining Today"
+        unique_id: solar_forecast_remaining_today
+        state: >
+          {% set src = states('input_select.solar_forecast_source') %}
+          {% if src == 'solcast' %}
+            {{ states('sensor.solcast_forecast_remaining_today') | float(0) | round(2) }}
+          {% else %}
+            {% set forecast = states('sensor.home_energy_production_today') | float(0) %}
+            {% set produced = states('sensor.today_s_pv_generation') | float(0) %}
+            {{ [forecast - produced, 0] | max | round(2) }}
+          {% endif %}
+        unit_of_measurement: "kWh"
+        device_class: energy
+        icon: mdi:solar-panel
+
+      # === VÝKON (W) ===
+
+      - name: "Solar Forecast Now"
+        unique_id: solar_forecast_now
+        state: >
+          {% set src = states('input_select.solar_forecast_source') %}
+          {% if src == 'solcast' %}
+            {{ states('sensor.solcast_forecast_this_hour') | float(0) | round(0) }}
+          {% else %}
+            {{ states('sensor.home_power_production_now') | float(0) | round(0) }}
+          {% endif %}
+        unit_of_measurement: "W"
+        device_class: power
+        icon: mdi:white-balance-sunny
+
+      - name: "Solar Forecast Next Hour"
+        unique_id: solar_forecast_next_hour
+        state: >
+          {% set src = states('input_select.solar_forecast_source') %}
+          {% if src == 'solcast' %}
+            {{ states('sensor.solcast_forecast_next_hour') | float(0) | round(0) }}
+          {% else %}
+            {{ states('sensor.home_energy_next_hour') | float(0) | round(0) }}
+          {% endif %}
+        unit_of_measurement: "W"
+        device_class: power
+        icon: mdi:clock-fast
+
+      - name: "Solar Peak Today"
+        unique_id: solar_peak_today
+        state: >
+          {% set src = states('input_select.solar_forecast_source') %}
+          {% if src == 'solcast' %}
+            {{ states('sensor.solcast_peak_forecast_today') | float(0) | round(0) }}
+          {% else %}
+            {{ states('sensor.home_peak_power_today') | float(0) | round(0) }}
+          {% endif %}
+        unit_of_measurement: "W"
+        device_class: power
+        icon: mdi:chart-bell-curve
+
+      - name: "Solar Peak Tomorrow"
+        unique_id: solar_peak_tomorrow
+        state: >
+          {% set src = states('input_select.solar_forecast_source') %}
+          {% if src == 'solcast' %}
+            {{ states('sensor.solcast_peak_forecast_tomorrow') | float(0) | round(0) }}
+          {% else %}
+            {{ states('sensor.home_peak_power_tomorrow') | float(0) | round(0) }}
+          {% endif %}
+        unit_of_measurement: "W"
+        device_class: power
+        icon: mdi:chart-bell-curve-cumulative
+
+      # === ROZHODOVACÍ SENZORY ===
+
+      - name: "Solar Forecast Tomorrow Rating"
+        unique_id: solar_forecast_tomorrow_rating
+        state: >
+          {% set forecast = states('sensor.solar_forecast_tomorrow') | float(0) %}
+          {% set ev_threshold = states('input_number.solar_forecast_ev_threshold') | float(5) %}
+          {% if forecast < ev_threshold %}
+            slabý
+          {% elif forecast < ev_threshold * 2 %}
+            stredný
+          {% else %}
+            silný
+          {% endif %}
+        icon: >
+          {% set forecast = states('sensor.solar_forecast_tomorrow') | float(0) %}
+          {% set ev_threshold = states('input_number.solar_forecast_ev_threshold') | float(5) %}
+          {% if forecast < ev_threshold %}
+            mdi:weather-cloudy
+          {% elif forecast < ev_threshold * 2 %}
+            mdi:weather-partly-cloudy
+          {% else %}
+            mdi:weather-sunny
+          {% endif %}
+        attributes:
+          forecast_kwh: "{{ states('sensor.solar_forecast_tomorrow') }}"
+          ev_threshold: "{{ states('input_number.solar_forecast_ev_threshold') }}"
+          bojler_threshold: "{{ states('input_number.solar_forecast_bojler_threshold') }}"
+
+  # === BINÁRNE SENZORY ===
+  - binary_sensor:
+      - name: "Solar EV Nabíjať v noci"
+        unique_id: solar_ev_nabijat_v_noci
+        state: >
+          {% if is_state('input_boolean.solar_forecast_ev_enabled', 'off') %}
+            false
+          {% else %}
+            {% set forecast = states('sensor.solar_forecast_tomorrow') | float(0) %}
+            {% set threshold = states('input_number.solar_forecast_ev_threshold') | float(5) %}
+            {{ forecast < threshold }}
+          {% endif %}
+        device_class: power
+        icon: >
+          {% if is_state('binary_sensor.solar_ev_nabijat_v_noci', 'on') %}
+            mdi:car-electric
+          {% else %}
+            mdi:solar-power
+          {% endif %}
+        attributes:
+          reason: >
+            {% if is_state('input_boolean.solar_forecast_ev_enabled', 'off') %}
+              Smart nabíjanie vypnuté
+            {% else %}
+              {% set forecast = states('sensor.solar_forecast_tomorrow') | float(0) %}
+              {% set threshold = states('input_number.solar_forecast_ev_threshold') | float(5) %}
+              {% if forecast < threshold %}
+                Predpoveď {{ forecast }} kWh < prah {{ threshold }} kWh → nabíjaj v noci
+              {% else %}
+                Predpoveď {{ forecast }} kWh ≥ prah {{ threshold }} kWh → počkaj na slnko
+              {% endif %}
+            {% endif %}
+
+      - name: "Solar Bojler Ohriať v noci"
+        unique_id: solar_bojler_ohriat_v_noci
+        state: >
+          {% if is_state('input_boolean.solar_forecast_bojler_enabled', 'off') %}
+            false
+          {% else %}
+            {% set forecast = states('sensor.solar_forecast_tomorrow') | float(0) %}
+            {% set threshold = states('input_number.solar_forecast_bojler_threshold') | float(8) %}
+            {{ forecast < threshold }}
+          {% endif %}
+        device_class: power
+        icon: mdi:water-boiler
+
+# ================================
+# AUTOMATIZÁCIE
+# ================================
+
+automation:
+  # Večerná notifikácia
+  - id: solar_forecast_evening_notification
+    alias: "FVE - Večerná predpoveď"
+    trigger:
+      - platform: time
+        at: "21:00:00"
+    action:
+      - service: persistent_notification.create
+        data:
+          title: "☀️ FVE predpoveď na zajtra"
+          message: >
+            {% set forecast = states('sensor.solar_forecast_tomorrow') | float(0) %}
+            {% set peak = states('sensor.solar_peak_tomorrow') | float(0) %}
+            {% set rating = states('sensor.solar_forecast_tomorrow_rating') %}
+            {% set ev_night = is_state('binary_sensor.solar_ev_nabijat_v_noci', 'on') %}
+            {% set bojler_night = is_state('binary_sensor.solar_bojler_ohriat_v_noci', 'on') %}
+            {% set source = states('input_select.solar_forecast_source') %}
+            
+            **Zdroj:** {{ source }}
+            **Výroba zajtra:** {{ forecast }} kWh ({{ rating }})
+            **Špička:** {{ peak }} W
+            
+            {% if ev_night %}
+            🔌 EV: Nabíjaj cez noc (málo slnka zajtra)
+            {% else %}
+            ☀️ EV: Počkaj na slnko (dosť energie zajtra)
+            {% endif %}
+            
+            {% if bojler_night %}
+            🔥 Bojler: Ohrej v noci (málo slnka zajtra)
+            {% else %}
+            ☀️ Bojler: Prebytky zajtra postačia
+            {% endif %}
+          notification_id: solar_forecast_evening
+
+  # Smart EV nočné nabíjanie
+  - id: solar_ev_smart_night_charge
+    alias: "FVE - Smart nočné nabíjanie EV"
+    trigger:
+      - platform: time
+        at: "22:30:00"
+    condition:
+      - condition: state
+        entity_id: input_boolean.solar_forecast_ev_enabled
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.solar_ev_nabijat_v_noci
+        state: "on"
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: sensor.hacharger_status_connector
+            state: "Available"
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: sensor.hacharger_status_connector
+            state: "Charging"
+      - condition: state
+        entity_id: binary_sensor.t1_aktivna
+        state: "on"
+    action:
+      - service: switch.turn_on
+        target:
+          entity_id: switch.hacharger_charge_control
+      - service: logbook.log
+        data:
+          name: "Solar EV Charging"
+          message: >
+            🌙☀️ Smart nočné nabíjanie spustené.
+            Predpoveď na zajtra: {{ states('sensor.solar_forecast_tomorrow') }} kWh
+            (pod prahom {{ states('input_number.solar_forecast_ev_threshold') }} kWh)
+      - service: persistent_notification.create
+        data:
+          title: "🔌 EV Smart Nabíjanie"
+          message: >
+            Automaticky spustené nočné nabíjanie (T1 tarifa).
+            Dôvod: Slabá predpoveď na zajtra ({{ states('sensor.solar_forecast_tomorrow') }} kWh).
+          notification_id: solar_ev_smart_charge

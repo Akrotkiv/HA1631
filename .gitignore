@@ -1,0 +1,27 @@
+# Secrets
+secrets.yaml
+
+# HA runtime/cache
+.storage/
+.cloud/
+home-assistant_v2.db
+home-assistant_v2.db-shm
+home-assistant_v2.db-wal
+home-assistant.log
+tts/
+deps/
+__pycache__/
+*.pyc
+
+# Backup
+backups/
+
+# HACS
+custom_components/
+www/community/
+
+# Zigbee
+zigbee2mqtt/
+
+# Ostatné
+.HA_VERSION

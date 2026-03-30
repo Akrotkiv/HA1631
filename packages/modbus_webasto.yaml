@@ -1,0 +1,429 @@
+# modbus:
+#
+# General remarks on options used
+# Connection to Webasto Unite using TQ.DM100 register definitions. This defines portnumber (502) and slave address (255).
+# IP address (dependent on your network configuration)
+# define: &Webasto_IP_Address 192.168.178.61
+#
+# At each sensor 
+# 'name' and 'unique_id' must be identical. The explicit setting of unique_id makes it possible to remove the sensor (of so desired).
+# use 'device_class' to customize the representation of the sensor.
+# 'unit_of_measurement' should only be used if no applicable 'device_class' could be selected.
+# 'slave_count' should not be used. It will make the names of the sensors ugly.
+#
+modbus:
+  - name: "Vestel EVC04 (TCPmodbus)(WebastoMOD)"
+    type: tcp
+    host: 192.168.88.88
+    port: 502
+    message_wait_milliseconds: 1
+
+    sensors:
+      - name: Webasto_ChargePointState_number
+        # This is a number that represents a state. The state(s) will be exposed 
+        # by another sesnsor derived from this sensor, using a template. Therfore 
+        # this sensor has a suffix '_number'. Both in name and unique_id
+        unique_id: Webasto_ChargePointState_number
+        slave: 255
+        input_type: holding
+        address: 1000
+        data_type: uint16
+        # Template 'Webasto.ChargePointState' will be used to display the states.
+
+      - name: Webasto_ChargeState_number
+        # This is a number that represents a state. The state(s) will be exposed 
+        # by another sensor derived from this sensor, using a template. Therfore 
+        # this sensor has a suffix '_number'. Both in name and unique_id
+        unique_id: Webasto_ChargeState_number
+        slave: 255
+        input_type: holding
+        address: 1001
+        data_type: uint16
+        # Template 'Webasto.ChargeState' will be used to display the states.
+
+      - name: Webasto_EVSEState_number
+        # This is a number that represents a state. The state(s) will be exposed 
+        # by another sensor derived from this sensor, using a template. Therfore 
+        # this sensor has a suffix '_number'. Both in name and unique_id
+        unique_id: Webasto_EVSEState_number
+        slave: 255
+        input_type: holding
+        address: 1002
+        data_type: uint16
+        # Template 'Webasto.EVSEState' will be used to display the states.
+
+      - name: Webasto_CableState_number
+        # This is a number that represents a state. The state(s) will be exposed 
+        # by another sensor derived from this sensor, using a template. Therfore 
+        # this sensor has a suffix '_number'. Both in name and unique_id
+        unique_id: Webasto_CableState_number
+        slave: 255
+        input_type: holding
+        address: 1004
+        data_type: uint16
+        # Template 'Webasto.CableState' will be used to display the states.
+
+      - name: Webasto_EVSEErrorCode_number
+        # This is a number that represents a state. The state(s) will be exposed 
+        # by another sennsor derived from this sensor, using a template. Therfore 
+        # this sensor has a suffix '_number'. Both in name and unique_id
+        unique_id: Webasto_EVSEErrorCode_number
+        slave: 255
+        input_type: holding
+        address: 1006
+        data_type: uint16
+        # Template 'Webasto.EVSEErrorCode' will be used to display the states.
+
+      - name: Charging Current L1
+        unique_id: Webasto_ChargingCurrentL1
+        slave: 255
+        input_type: holding
+        address: 1008
+        data_type: uint16
+        device_class: current
+        # scaling: output [A] = 0.001*value [mA] + 0, precision [mA]
+        offset: 0
+        scale: 0.001
+        precision: 3
+        state_class: measurement
+        unit_of_measurement: A
+
+      - name: Charging Current L2
+        unique_id: Webasto_ChargingCurrentL2
+        slave: 255
+        input_type: holding
+        address: 1010
+        data_type: uint16
+        device_class: current
+        # scaling: output [A] = 0.001*value [mA] + 0, precision [mA]
+        offset: 0
+        scale: 0.001
+        precision: 3
+        state_class: measurement
+        unit_of_measurement: A
+
+      - name: Charging Current L3
+        unique_id: Webasto_ChargingCurrentL3
+        slave: 255
+        input_type: holding
+        address: 1012
+        data_type: uint16
+        device_class: current
+        # scaling: output [A] = 0.001*value [mA] + 0, precision [mA]
+        offset: 0
+        scale: 0.001
+        precision: 3
+        state_class: measurement
+        unit_of_measurement: A
+
+      - name: Active Power
+        unique_id: Webasto_ActivePower
+        slave: 255
+        input_type: holding
+        address: 1020
+        data_type: uint32
+        device_class: power
+        state_class: measurement
+#        swap: <none / byte / word / word_byte> (not used for uint16/uint32)
+        unit_of_measurement: W
+
+      - name: Energy meter
+        unique_id: Webasto_Energymeter
+        slave: 255
+        input_type: holding
+        address: 1036
+        data_type: uint32
+        device_class: energy
+        state_class: total_increasing
+#        swap: <none / byte / word / word_byte> (not used for uint16/uint32)
+        # scaling: output [kWh] = 0.001*value [Wh] + 0, precision [Wh]
+        offset: 0
+        scale: 0.001
+        precision: 3
+        unit_of_measurement: kWh
+
+      - name: Max current possible
+        unique_id: Webasto_Maxcurrent
+        slave: 255
+        input_type: holding
+        address: 1100
+        data_type: uint16
+        device_class: current
+        state_class: measurement
+        unit_of_measurement: A
+
+      - name: Min current possible
+        unique_id: Webasto_Minimumcurrentlimit
+        slave: 255
+        input_type: holding
+        address: 1102
+        data_type: uint16
+        device_class: current
+        state_class: measurement
+        unit_of_measurement: A
+
+      - name: Max current EVSE
+        unique_id: Webasto_MaxCurrentfromEVSE
+        slave: 255
+        input_type: holding
+        address: 1104
+        data_type: uint16
+        device_class: current
+        state_class: measurement
+        unit_of_measurement: A
+
+      - name: Max current cable
+        unique_id: Webasto_MaxCurrentfromCable
+        slave: 255
+        input_type: holding
+        address: 1106
+        data_type: uint16
+        device_class: current
+        state_class: measurement
+        unit_of_measurement: A
+
+      - name: Max current EV
+        unique_id: Webasto_MaxCurrentfromEV
+        slave: 255
+        input_type: holding
+        address: 1108
+        data_type: uint16
+        device_class: current
+        state_class: measurement
+        unit_of_measurement: A
+
+      - name: User priority
+        unique_id: Webasto_Userpriority
+        slave: 255
+        input_type: holding
+        address: 1200
+        data_type: uint16
+#        device_class: enum
+        state_class: measurement
+
+      - name: EV SoC actual
+        unique_id: Webasto_EVBatteryState
+        slave: 255
+        input_type: holding
+        address: 1300
+        data_type: uint16
+        device_class: battery
+        min_value: 0
+        max_value: 100
+        state_class: measurement
+        unit_of_measurement: "%"
+
+      - name: EV Energy actual
+        unique_id: Webasto_EVBatteryEnergy
+        slave: 255
+        input_type: holding
+        address: 1302
+        data_type: uint32
+        device_class: energy_storage
+        # scaling: output [kWh] = 0.001*value [Wh] + 0
+        offset: 0
+        scale: 0.001
+        precision: 3
+        state_class: measurement
+#        swap: <none / byte / word / word_byte> (not used for uint16/uint32)
+        unit_of_measurement: kWh
+
+      - name: Webasto_ScheduleType_number
+        # This is a number that represents a state. The state(s) will be exposed 
+        # by another sennsor derived from this sensor, using a template. Therfore 
+        # this sensor has a suffix '_number'. Both in name and unique_id
+        unique_id: Webasto_ScheduleType_number
+        slave: 255
+        input_type: holding
+        address: 1400
+        data_type: uint16
+        # Template 'Webasto.ScheduleType' will be used to display the states.
+
+      - name: EV Energy target
+        unique_id: Webasto_EVRequiredEnergy
+        slave: 255
+        input_type: holding
+        address: 1402
+        data_type: uint32
+        device_class: energy_storage
+        # scaling: output [kWh] = 0.001*value [Wh] + 0
+        offset: 0
+        scale: 0.001
+        precision: 3
+        state_class: measurement
+#        swap: <none / byte / word / word_byte> (not used for uint16/uint32)
+        unit_of_measurement: kWh
+
+      - name: EV SoC target
+        unique_id: Webasto_RequiredBatteryState
+        slave: 255
+        input_type: holding
+        address: 1406
+        data_type: uint16
+        device_class: battery
+        min_value: 0
+        max_value: 100
+        state_class: measurement
+        unit_of_measurement: "%"
+
+# Scheduled time & date registries will be read into two sensors.
+# Using a template they will be combined into one entity 'Webasto Scheduled end'
+      - name: Webasto_ScheduledTime_number
+        unique_id: Webasto_ScheduledTime_number
+        slave: 255
+        input_type: holding
+        address: 1408
+        data_type: uint32
+        # device_class: None specified
+        state_class: measurement
+        unit_of_measurement: hhmmss
+
+      - name: Webasto ScheduledDate_number
+        unique_id: Webasto_ScheduledDate_number
+        slave: 255
+        input_type: holding
+        address: 1412
+        data_type: uint32
+        # device_class: None - because it is numerical
+        state_class: measurement
+        unit_of_measurement: yymmdd
+
+      - name: Charged Energy
+        unique_id: Webasto_ChargedEnergy
+        slave: 255
+        input_type: holding
+        address: 1502
+        data_type: uint16
+        device_class: energy
+        state_class: total
+        # scaling: output [kWh] = 0.001*value [Wh] + 0, precision [Wh]
+        offset: 0
+        scale: 0.001
+        precision: 3
+        unit_of_measurement: kWh
+
+      - name: Webasto_StartTime_number
+        unique_id: Webasto_StartTime_number
+        slave: 255
+        input_type: holding
+        address: 1504
+        data_type: uint32
+        # device_class: None specified
+        state_class: measurement
+        unit_of_measurement: hhmmss
+
+      - name: Charging duration
+        unique_id: Webasto_ChargingTime
+        slave: 255
+        input_type: holding
+        address: 1508
+        data_type: uint32
+        device_class: duration
+        state_class: measurement
+        unit_of_measurement: s
+
+      - name: Webasto_EndTime_number
+        unique_id: Webasto_EndTime_number
+        slave: 255
+        input_type: holding
+        address: 1512
+        data_type: uint32
+        # device_class: None specified
+        state_class: measurement
+        unit_of_measurement: hhmmss
+
+      - name: User ID
+        unique_id: Webasto_UserID
+        slave: 255
+        input_type: holding
+        address: 1600
+        # User ID is sent in 10 registers LSB first.
+        data_type: custom
+        count: 5
+        structure: ">Qxx"  # ignores last two bytes
+        # device_class: None specified
+        state_class: measurement
+
+      - name: Plug and Connect
+        unique_id: Webasto_15118SmartVehicleDetected
+        slave: 255
+        input_type: holding
+        address: 1620
+        data_type: uint32
+#        device_class: enum
+        state_class: measurement
+
+# The Communication timeout defines a maximum period for the switch.Webast_Keepalive_switch to set a value of '1'.
+# Otherwise the TCP connection is closed by the Webasto. The default value is 20 seconds.
+# The Communication timeout can be changed by the combination of:
+# - input_number.Webasto_ComTimeout_set
+# - automation.webasto_update_communication_timeout
+      - name: Communication timeout
+        unique_id: Webasto_ComTimeout
+        slave: 255
+        input_type: holding
+        address: 2002
+        data_type: uint16
+        device_class: duration
+        state_class: measurement
+        unit_of_measurement: s
+
+# List of all fields that can be defined for a 'sensor' entity.
+#
+# sensors - config template (with correct indentation)
+#      - name: Field Name
+#        unique_id: <Webasto_FieldNameID>
+#        slave: 255
+#        input_type: <holding / input> (type of Modbus register)
+#        address: 1000
+#        data_type: <uint16 / uint32 / custom>
+#        device_class: <none / enum / apparent_power / battery / current / date / duration / energy / energy_storage / timestamp / power (see: https://www.home-assistant.io/integrations/sensor/)
+#        min_value: <float>
+#        max_value: <float>
+#        nan_value: <0x000 hex representing NaN>
+#        zero_suppress: <float absolute(+) bandwidth>
+# scaling: output = scale*value + offset
+#        offset: <float>
+#        scale: <float>
+#        precision: <integer number of decimals>
+#        slave_count: <allowing multiples sensors to be read with one modbus-message. Names are sacrificed>
+#        state_class: <measurement / total / total_increasing>
+#        structure: <formatting string for data_type=custom>
+#        swap: <none / byte / word / word_byte> (not used for uint16/uint32)
+#        unit_of_measurement: <string> (label for units)
+#
+
+    switches:
+# The Webasto Unite wallbox needs a keep alive trigger periodically by writing 
+# a 1 in the keep alive register. If you do not do this, the TCP connection
+# will be closed by de Webasto Unite. The current timeout period is in sensor 
+# Webasto_ComTimeout. The default is a 20 second interval.
+# Although it is not certain, the register will be read after writing, using 
+# the verify option of the switch entity. This seems to function correctly.
+# The automation 'Webasto Keepalive @20secs' is used to periodically set this switch On
+      - name: Keepalive
+        unique_id: Webasto_Keepalive_switch
+        slave: 255
+        write_type: holding
+        address: 6000
+        command_on: 1
+        command_off: 0
+        verify:
+          delay: 5
+
+# List of all fields that can be defines for a 'switch' entity.
+#
+# switches
+#      - name: Field Name
+#        unique_id: <Webasto_FieldNameID>
+#        slave: <modbus slave ID>
+#        write_type: <holding / holdings / coil / coils>
+#        address: <address of write register>
+#        command_on: <int>
+#        command_off: <int>
+#        verify:
+#          input_type: <coil / discrete / holding / input>
+#          address: <address of verify register, defaul identical as ???>
+#          delay: <ms?>
+#          state_on: <int, default identical command_on>
+#          state_off: <int, default identical command_off>

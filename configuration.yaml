@@ -1,0 +1,1105 @@
+# Loads default set of integrations. Do not remove.
+default_config:
+
+# Load frontend themes from the themes folder
+frontend:
+  themes: !include_dir_merge_named themes
+
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
+
+homeassistant:
+  packages:
+    webasto_next: !include packages/modbus_webasto.yaml
+    ev_charging: !include packages/ev_charging_tracking.yaml
+    
+#rest:
+#  - resource: http://192.168.88.72/api/status
+#    scan_interval: 30
+#    sensor:
+#      - name: "OVMS Battery SOC"
+#        value_template: "{{ value_json['soc'] }}"
+    
+# ================================
+# OVMS - REST API (dexters-web.de)
+# ================================
+
+rest:
+  # OVMS Status - hlavné údaje
+  - resource: !secret ovms_status_url
+    scan_interval: 120
+    sensor:
+      - name: "OVMS SOC"
+        value_template: "{{ value_json.soc | default(0) }}"
+        unit_of_measurement: "%"
+        device_class: battery
+        
+      - name: "OVMS Range"
+        value_template: "{{ value_json.estimatedrange | default(0) }}"
+        unit_of_measurement: "km"
+        icon: mdi:map-marker-distance
+        
+      - name: "OVMS Ideal Range"
+        value_template: "{{ value_json.idealrange | default(0) }}"
+        unit_of_measurement: "km"
+        icon: mdi:map-marker-distance
+        
+      - name: "OVMS Charging"
+        value_template: "{{ value_json.charging | default(false) }}"
+        icon: mdi:ev-station
+        
+      - name: "OVMS Charge State"
+        value_template: "{{ value_json.chargestate | default('unknown') }}"
+        icon: mdi:battery-charging
+        
+      - name: "OVMS SOH"
+        value_template: "{{ value_json.soh | default(0) }}"
+        unit_of_measurement: "%"
+        icon: mdi:battery-heart-variant
+        
+      - name: "OVMS Odometer"
+        value_template: "{{ value_json.odometer | default(0) | round(1) }}"
+        unit_of_measurement: "km"
+        icon: mdi:counter
+
+  # OVMS Charge - nabíjanie detaily
+  - resource: !secret ovms_charge_url
+    scan_interval: 60
+    sensor:
+      - name: "OVMS Charge Power"
+        value_template: "{{ value_json.chargepower | default(0) }}"
+        unit_of_measurement: "kW"
+        device_class: power
+        
+      - name: "OVMS Charge Current"
+        value_template: "{{ value_json.chargecurrent | default(0) }}"
+        unit_of_measurement: "A"
+        device_class: current
+        
+      - name: "OVMS Charge Voltage"
+        value_template: "{{ value_json.chargevoltage | default(0) }}"
+        unit_of_measurement: "V"
+        device_class: voltage    
+
+# ================================
+# FLEXIBILNÉ HELPERS PRE TARÍFNY SYSTÉM + AKVÁRIUM
+# ================================
+
+# Časové nastavenia tarify + akvárium
+input_datetime:
+  # T1 - NOC (najlacnejšia) 22:00-06:00
+  tariff_t1_start:
+    name: "T1 Noc - Začiatok"
+    has_time: true
+  
+  tariff_t1_end:
+    name: "T1 Noc - Koniec"
+    has_time: true
+  
+  # T2 - POPOLUDNIE 13:00-19:00
+  tariff_t2_start:
+    name: "T2 Popoludnie - Začiatok"
+    has_time: true
+  
+  tariff_t2_end:
+    name: "T2 Popoludnie - Koniec"
+    has_time: true
+  
+  # T3 - PREDPOLUDNIE 09:00-13:00
+  tariff_t3_start:
+    name: "T3 Predpoludnie - Začiatok"
+    has_time: true
+  
+  tariff_t3_end:
+    name: "T3 Predpoludnie - Koniec"
+    has_time: true
+  
+  # T4 - RÁNO/VEČER (najdrahšia) 06:00-09:00 + 19:00-22:00
+  tariff_t4_morning_start:
+    name: "T4 Ráno - Začiatok"
+    has_time: true
+  
+  tariff_t4_morning_end:
+    name: "T4 Ráno - Koniec"
+    has_time: true
+  
+  tariff_t4_evening_start:
+    name: "T4 Večer - Začiatok"
+    has_time: true
+  
+  tariff_t4_evening_end:
+    name: "T4 Večer - Koniec"
+    has_time: true
+  
+# Helper pre sledovanie času spustenia bojlera
+  # Bojler Dražice (PRIMÁRNY)
+  bojler_drazice_start_time:
+    name: "Dražice - Čas spustenia"
+    has_date: true
+    has_time: true
+  
+  # Bojler Ariston (SEKUNDÁRNY)
+  bojler_ariston_start_time:
+    name: "Ariston - Čas spustenia"
+    has_date: true
+    has_time: true
+
+  # AKVÁRIUM - časové sloty
+  aquarium_slot1_time:
+    name: "Slot 1 - Čas"
+    has_date: false
+    has_time: true
+
+  aquarium_slot2_time:
+    name: "Slot 2 - Čas"
+    has_date: false
+    has_time: true
+
+  aquarium_slot3_time:
+    name: "Slot 3 - Čas"
+    has_date: false
+    has_time: true
+
+  aquarium_slot4_time:
+    name: "Slot 4 - Čas"
+    has_date: false
+    has_time: true
+    
+  aquarium_slot5_time:
+    name: "Slot 5 - Čas"
+    has_date: false
+    has_time: true
+
+# Prepínače systému
+input_boolean:
+  tariff_system_enabled:
+    name: "Tarífny systém aktívny"
+    icon: mdi:currency-eur
+  
+  # NOVÉ - Flexibilné riadenie bojlera
+  bojler_enable_surplus:
+    name: "Bojler - zapínať pri prebytkoch"
+    icon: mdi:solar-power
+  
+  # BOJLER DRAŽICE (2000W) - PRIMÁRNY
+  bojler_drazice_enable_surplus:
+    name: "Dražice - Zapínať pri prebytkoch"
+    icon: mdi:solar-power
+  
+  bojler_drazice_enable_t1:
+    name: "Dražice - Zapínať pri T1 (Noc)"
+    icon: mdi:weather-night
+  
+  bojler_drazice_enable_t2:
+    name: "Dražice - Zapínať pri T2 (Popoludnie)"
+    icon: mdi:weather-sunset-down
+  
+  bojler_drazice_enable_t3:
+    name: "Dražice - Zapínať pri T3 (Predpoludnie)"
+    icon: mdi:weather-sunny
+  
+  bojler_drazice_enable_t4:
+    name: "Dražice - Zapínať pri T4 (Ráno/Večer)"
+    icon: mdi:alert-circle
+  
+  bojler_drazice_forced_mode:
+    name: "Dražice - Vynútený režim aktívny"
+    icon: mdi:alert
+    
+  # BOJLER ARISTON (1600W) - SEKUNDÁRNY
+  bojler_ariston_enable_surplus:
+    name: "Ariston - Zapínať pri prebytkoch"
+    icon: mdi:solar-power
+  
+  bojler_ariston_enable_t1:
+    name: "Ariston - Zapínať pri T1 (Noc)"
+    icon: mdi:weather-night
+  
+  bojler_ariston_enable_t2:
+    name: "Ariston - Zapínať pri T2 (Popoludnie)"
+    icon: mdi:weather-sunset-down
+  
+  bojler_ariston_enable_t3:
+    name: "Ariston - Zapínať pri T3 (Predpoludnie)"
+    icon: mdi:weather-sunny
+  
+  bojler_ariston_enable_t4:
+    name: "Ariston - Zapínať pri T4 (Ráno/Večer)"
+    icon: mdi:alert-circle
+    
+  # AKVÁRIUM - prepínače
+  aquarium_automation:
+    name: "Akvárium - Automatizácia"
+    icon: mdi:fish
+
+  aquarium_slot1_enabled:
+    name: "Slot 1 - Zapnutý"
+    icon: mdi:clock-outline
+
+  aquarium_slot2_enabled:
+    name: "Slot 2 - Zapnutý"
+    icon: mdi:clock-outline
+
+  aquarium_slot3_enabled:
+    name: "Slot 3 - Zapnutý"
+    icon: mdi:clock-outline
+
+  aquarium_slot4_enabled:
+    name: "Slot 4 - Zapnutý"
+    icon: mdi:clock-outline
+
+  aquarium_manual_override:
+    name: "Akvárium - Manuálne ovládanie"
+    icon: mdi:hand-back-right
+
+  aquarium_slot5_enabled:
+    name: "Slot 5 - Zapnutý"
+    icon: mdi:clock-outline
+    
+  # ========================================
+  # KLIMATIZÁCIA - tarifné riadenie
+  # ========================================
+  klima_automation_enabled:
+    name: "Klíma - Automatizácia aktívna"
+    icon: mdi:air-conditioner
+
+  klima_enable_t1:
+    name: "Klíma - Povoliť v T1 (Noc)"
+    icon: mdi:weather-night
+
+  klima_enable_t2:
+    name: "Klíma - Povoliť v T2 (Popoludnie)"
+    icon: mdi:weather-sunset-down
+
+  klima_enable_t3:
+    name: "Klíma - Povoliť v T3 (Predpoludnie)"
+    icon: mdi:weather-sunny
+
+  klima_enable_t4:
+    name: "Klíma - Povoliť v T4 (Ráno/Večer)"
+    icon: mdi:alert-circle
+
+  klima_was_on_before_shutoff:
+    name: "Klíma - Bola zapnutá pred vypnutím"
+    icon: mdi:history
+
+  klima_manual_override:
+    name: "Klíma - Manuálny režim"
+    icon: mdi:hand-back-right
+
+  # ========================================
+  # POČÍTANIE NÁKLADOV SPOTREBIČOV
+  # ========================================
+  cost_tracking_enabled:
+    name: "Sledovanie nákladov spotrebičov"
+    icon: mdi:chart-line
+
+# Výberové menu
+input_select:
+  current_tariff:
+    name: "Aktuálna tarifa"
+    options:
+      - "T1"  # Noc 22:00-06:00 (najlacnejšia)
+      - "T2"  # Popoludnie 13:00-19:00
+      - "T3"  # Predpoludnie 09:00-13:00
+      - "T4"  # Ráno/Večer 06:00-09:00+19:00-22:00 (najdrahšia)
+    icon: mdi:flash
+  
+  bojler_drazice_mode:
+    name: "Dražice - Režim"
+    options:
+      - "OFF"
+      - "FORCED"  # 38°C
+      - "NORMAL"     # 45°C
+      - "BOOST"      # 60°C
+    initial: "NORMAL"
+    icon: mdi:thermostat
+  
+  bojler_drazice_start_reason:
+    name: "Dražice - Dôvod režimu"
+    options:
+      - "none"
+      - "surplus"
+      - "t1"
+      - "t2"
+      - "t3"
+      - "t4"
+      - "forced"
+      - "manual"
+    initial: "none"
+    icon: mdi:help-circle
+
+  bojler_ariston_start_reason:
+    name: "Ariston - Dôvod zapnutia"
+    options:
+      - "none"
+      - "manual"
+      - "both"
+      - "surplus"
+      - "drazice_ready"
+      - "t1"
+      - "t2"
+      - "t3"
+      - "t4"
+    initial: "none"
+    icon: mdi:help-circle
+
+# ========================================
+# NASTAVITEĽNÉ CENY A PRAHY
+# ========================================
+# CENY SÚ TERAZ V EUR/kWh S DISTRIBÚCIOU A DPH
+# Vikendové ceny majú 12% zľavu
+# ========================================
+input_number:
+  # ========================================
+  # CENY TARÍF - TÝŽDEŇ (EUR/kWh s distribúciou a DPH)
+  # ========================================
+  tariff_t1_price:
+    name: "T1 Noc - Cena týždeň (EUR/kWh)"
+    min: 0
+    max: 1
+    step: 0.00001
+    unit_of_measurement: "EUR/kWh"
+    icon: mdi:currency-eur
+    mode: box
+  
+  tariff_t2_price:
+    name: "T2 Popoludnie - Cena týždeň (EUR/kWh)"
+    min: 0
+    max: 1
+    step: 0.00001
+    unit_of_measurement: "EUR/kWh"
+    icon: mdi:currency-eur
+    mode: box
+  
+  tariff_t3_price:
+    name: "T3 Predpoludnie - Cena týždeň (EUR/kWh)"
+    min: 0
+    max: 1
+    step: 0.00001
+    unit_of_measurement: "EUR/kWh"
+    icon: mdi:currency-eur
+    mode: box
+  
+  tariff_t4_price:
+    name: "T4 Ráno/Večer - Cena týždeň (EUR/kWh)"
+    min: 0
+    max: 1
+    step: 0.00001
+    unit_of_measurement: "EUR/kWh"
+    icon: mdi:currency-eur
+    mode: box
+
+  # ========================================
+  # CENY TARÍF - VÍKEND (EUR/kWh s distribúciou a DPH)
+  # ========================================
+  tariff_t1_price_weekend:
+    name: "T1 Noc - Cena víkend (EUR/kWh)"
+    min: 0
+    max: 1
+    step: 0.00001
+    unit_of_measurement: "EUR/kWh"
+    icon: mdi:calendar-weekend
+    mode: box
+  
+  tariff_t2_price_weekend:
+    name: "T2 Popoludnie - Cena víkend (EUR/kWh)"
+    min: 0
+    max: 1
+    step: 0.00001
+    unit_of_measurement: "EUR/kWh"
+    icon: mdi:calendar-weekend
+    mode: box
+  
+  tariff_t3_price_weekend:
+    name: "T3 Predpoludnie - Cena víkend (EUR/kWh)"
+    min: 0
+    max: 1
+    step: 0.00001
+    unit_of_measurement: "EUR/kWh"
+    icon: mdi:calendar-weekend
+    mode: box
+  
+  tariff_t4_price_weekend:
+    name: "T4 Ráno/Večer - Cena víkend (EUR/kWh)"
+    min: 0
+    max: 1
+    step: 0.00001
+    unit_of_measurement: "EUR/kWh"
+    icon: mdi:calendar-weekend
+    mode: box
+
+  # ========================================
+  # DENNÉ NÁKLADY SPOTREBIČOV (reset každý deň)
+  # ========================================
+  cost_daily_klima:
+    name: "Denné náklady - Klíma (EUR)"
+    min: 0
+    max: 100
+    step: 0.001
+    unit_of_measurement: "EUR"
+    icon: mdi:air-conditioner
+    mode: box
+  
+  cost_daily_bojler_drazice:
+    name: "Denné náklady - Dražice (EUR)"
+    min: 0
+    max: 100
+    step: 0.001
+    unit_of_measurement: "EUR"
+    icon: mdi:water-boiler
+    mode: box
+  
+  cost_daily_bojler_ariston:
+    name: "Denné náklady - Ariston (EUR)"
+    min: 0
+    max: 100
+    step: 0.001
+    unit_of_measurement: "EUR"
+    icon: mdi:water-boiler-alert
+    mode: box
+
+  # MESAČNÉ NÁKLADY SPOTREBIČOV
+  cost_monthly_klima:
+    name: "Mesačné náklady - Klíma (EUR)"
+    min: 0
+    max: 1000
+    step: 0.001
+    unit_of_measurement: "EUR"
+    icon: mdi:air-conditioner
+    mode: box
+
+  cost_monthly_bojler_drazice:
+    name: "Mesačné náklady - Dražice (EUR)"
+    min: 0
+    max: 1000
+    step: 0.001
+    unit_of_measurement: "EUR"
+    icon: mdi:water-boiler
+    mode: box
+
+  cost_monthly_bojler_ariston:
+    name: "Mesačné náklady - Ariston (EUR)"
+    min: 0
+    max: 1000
+    step: 0.001
+    unit_of_measurement: "EUR"
+    icon: mdi:water-boiler-alert
+    mode: box
+
+  # DENNÁ ENERGIA SPOTREBIČOV (kWh)
+  energy_daily_klima:
+    name: "Denná energia - Klíma (kWh)"
+    min: 0
+    max: 100
+    step: 0.001
+    unit_of_measurement: "kWh"
+    icon: mdi:lightning-bolt
+    mode: box
+
+  energy_daily_bojler_drazice:
+    name: "Denná energia - Dražice (kWh)"
+    min: 0
+    max: 100
+    step: 0.001
+    unit_of_measurement: "kWh"
+    icon: mdi:lightning-bolt
+    mode: box
+
+  energy_daily_bojler_ariston:
+    name: "Denná energia - Ariston (kWh)"
+    min: 0
+    max: 100
+    step: 0.001
+    unit_of_measurement: "kWh"
+    icon: mdi:lightning-bolt
+    mode: box
+
+  # ========================================
+  # BOJLER DRAŽICE (2000W) - PRIMÁRNY - Teploty
+  # ========================================
+  bojler_drazice_temp_boost:
+    name: "Dražice - BOOST teplota (°C)"
+    min: 50
+    max: 70
+    step: 1
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer-high
+  
+  bojler_drazice_temp_normal:
+    name: "Dražice - NORMAL teplota (°C)"
+    min: 40
+    max: 55
+    step: 1
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer
+  
+  bojler_drazice_temp_forced:
+    name: "Dražice - FORCED teplota (°C)"
+    min: 35
+    max: 45
+    step: 1
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer-low
+  
+  # Prahy pre Dražice
+  bojler_drazice_surplus_threshold_boost:
+    name: "Dražice - Prah pre BOOST (W)"
+    min: 1500
+    max: 5000
+    step: 250
+    unit_of_measurement: "W"
+    icon: mdi:flash-on
+  
+  bojler_drazice_surplus_threshold_off:
+    name: "Dražice - Prah vypnutia BOOST (W)"
+    min: 500
+    max: 2000
+    step: 100
+    unit_of_measurement: "W"
+    icon: mdi:flash-off
+    
+  bojler_drazice_min_time:
+    name: "Dražice - Min. čas behu (min)"
+    min: 10
+    max: 120
+    step: 5
+    unit_of_measurement: "min"
+    icon: mdi:timer
+  
+  # BOJLER ARISTON (1600W) - SEKUNDÁRNY
+  bojler_ariston_surplus_threshold_on:
+    name: "Ariston - Prah zapnutia (W)"
+    min: 1000
+    max: 5000
+    step: 250
+    unit_of_measurement: "W"
+    icon: mdi:flash-on
+  
+  bojler_ariston_surplus_threshold_off:
+    name: "Ariston - Prah vypnutia (W)"
+    min: -500
+    max: 1000
+    step: 50
+    unit_of_measurement: "W"
+    icon: mdi:flash-off
+  
+  bojler_ariston_min_time:
+    name: "Ariston - Min. čas behu (min)"
+    min: 10
+    max: 120
+    step: 5
+    unit_of_measurement: "min"
+    icon: mdi:timer
+  
+  # Prioritizácia
+  combined_surplus_threshold:
+    name: "Prah pre oba bojlery súčasne (W)"
+    min: 3500
+    max: 10000
+    step: 500
+    unit_of_measurement: "W"
+    icon: mdi:flash-triangle
+    
+  bojler_drazice_surplus_threshold_on:
+    name: "Dražice - Prah zapnutia (W)"
+    min: 1000
+    max: 8000
+    step: 250
+    unit_of_measurement: "W"
+    icon: mdi:flash-on
+  
+  bojler_ariston_target_temp:
+    name: "Ariston - Cieľová teplota (°C)"
+    min: 40
+    max: 80
+    step: 1
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer
+
+  # AKVÁRIUM - nastavenia
+  aquarium_color_temp:
+    name: "Akvárium - Teplota farieb"
+    min: 153  # 6500K
+    max: 500  # 2000K
+    step: 1
+    initial: 250  # ~4000K
+    unit_of_measurement: "mired"
+    icon: mdi:palette
+
+  # SLOT 1
+  aquarium_slot1_brightness:
+    name: "Slot 1 - Jas"
+    min: 0
+    max: 255
+    step: 1
+    unit_of_measurement: ""
+    icon: mdi:brightness-6
+    
+  aquarium_slot1_transition:
+    name: "Slot 1 - Prechod"
+    min: 0
+    max: 3600
+    step: 30
+    unit_of_measurement: "s"
+    icon: mdi:timer-outline
+
+  # SLOT 2
+  aquarium_slot2_brightness:
+    name: "Slot 2 - Jas"
+    min: 0
+    max: 255
+    step: 1
+    unit_of_measurement: ""
+    icon: mdi:brightness-5
+    
+  aquarium_slot2_transition:
+    name: "Slot 2 - Prechod"
+    min: 0
+    max: 3600
+    step: 30
+    unit_of_measurement: "s"
+    icon: mdi:timer-outline
+
+  # SLOT 3
+  aquarium_slot3_brightness:
+    name: "Slot 3 - Jas"
+    min: 0
+    max: 255
+    step: 1
+    unit_of_measurement: ""
+    icon: mdi:brightness-4
+    
+  aquarium_slot3_transition:
+    name: "Slot 3 - Prechod"
+    min: 0
+    max: 3600
+    step: 30
+    unit_of_measurement: "s"
+    icon: mdi:timer-outline
+
+  # SLOT 4
+  aquarium_slot4_brightness:
+    name: "Slot 4 - Jas"
+    min: 0
+    max: 255
+    step: 30
+    unit_of_measurement: ""
+    icon: mdi:brightness-1
+    
+  aquarium_slot4_transition:
+    name: "Slot 4 - Prechod"
+    min: 0
+    max: 3600
+    step: 30
+    unit_of_measurement: "s"
+    icon: mdi:timer-outline
+    
+  aquarium_slot5_brightness:
+    name: "Slot 5 - Jas"
+    min: 0
+    max: 255
+    step: 10
+    unit_of_measurement: ""
+    icon: mdi:brightness-1
+    
+  aquarium_slot5_transition:
+    name: "Slot 5 - Prechod"
+    min: 0
+    max: 3600
+    step: 30
+    unit_of_measurement: "s"
+    icon: mdi:timer-outline
+
+  # PAMÄŤ pre zachovanie stavu
+  aquarium_last_brightness:
+    name: "Akvárium - Posledný jas"
+    min: 0
+    max: 255
+    step: 1
+    initial: 255
+    
+  aquarium_last_color_temp:
+    name: "Akvárium - Posledná teplota"
+    min: 153
+    max: 500
+    step: 1
+    initial: 250
+
+  vetranie_stupen:
+    name: "Vetranie - Stupeň"
+    min: 0
+    max: 8
+    step: 1
+    mode: slider
+    icon: mdi:fan
+
+
+# ================================
+# TEMPLATE SENSORY PRE TARÍFNY SYSTÉM
+# ================================
+
+template:
+  - binary_sensor:
+      # ========================================
+      # DETEKCIA VÍKENDU
+      # ========================================
+      - name: "Je víkend"
+        unique_id: je_vikend
+        state: >
+          {{ now().weekday() >= 5 }}
+        icon: >
+          {% if now().weekday() >= 5 %}
+            mdi:calendar-weekend
+          {% else %}
+            mdi:calendar-week
+          {% endif %}
+
+      # T1 - NOC 22:00-06:00 (cez polnoc)
+      - name: "T1 aktívna"
+        unique_id: t1_aktivna
+        state: >
+          {% if not is_state('input_boolean.tariff_system_enabled', 'on') %}
+            false
+          {% else %}
+            {% set now_time = now().strftime('%H:%M') %}
+            {% set t1_start = states('input_datetime.tariff_t1_start')[:5] %}
+            {% set t1_end = states('input_datetime.tariff_t1_end')[:5] %}
+            {{ now_time >= t1_start or now_time < t1_end }}
+          {% endif %}
+        device_class: power
+        icon: mdi:weather-night
+        attributes:
+          friendly_name: "T1 Noc"
+          time_range: "22:00 - 06:00"
+          price_week: "{{ states('input_number.tariff_t1_price') }} EUR/kWh"
+          price_weekend: "{{ states('input_number.tariff_t1_price_weekend') }} EUR/kWh"
+      
+      # T2 - POPOLUDNIE 13:00-19:00
+      - name: "T2 aktívna"
+        unique_id: t2_aktivna
+        state: >
+          {% if not is_state('input_boolean.tariff_system_enabled', 'on') %}
+            false
+          {% else %}
+            {% set now_time = now().strftime('%H:%M') %}
+            {% set t2_start = states('input_datetime.tariff_t2_start')[:5] %}
+            {% set t2_end = states('input_datetime.tariff_t2_end')[:5] %}
+            {{ t2_start <= now_time < t2_end }}
+          {% endif %}
+        device_class: power
+        icon: mdi:weather-sunset-down
+        attributes:
+          friendly_name: "T2 Popoludnie"
+          time_range: "13:00 - 19:00"
+          price_week: "{{ states('input_number.tariff_t2_price') }} EUR/kWh"
+          price_weekend: "{{ states('input_number.tariff_t2_price_weekend') }} EUR/kWh"
+      
+      # T3 - PREDPOLUDNIE 09:00-13:00
+      - name: "T3 aktívna"
+        unique_id: t3_aktivna
+        state: >
+          {% if not is_state('input_boolean.tariff_system_enabled', 'on') %}
+            false
+          {% else %}
+            {% set now_time = now().strftime('%H:%M') %}
+            {% set t3_start = states('input_datetime.tariff_t3_start')[:5] %}
+            {% set t3_end = states('input_datetime.tariff_t3_end')[:5] %}
+            {{ t3_start <= now_time < t3_end }}
+          {% endif %}
+        device_class: power
+        icon: mdi:weather-sunny
+        attributes:
+          friendly_name: "T3 Predpoludnie"
+          time_range: "09:00 - 13:00"
+          price_week: "{{ states('input_number.tariff_t3_price') }} EUR/kWh"
+          price_weekend: "{{ states('input_number.tariff_t3_price_weekend') }} EUR/kWh"
+      
+      # T4 - RÁNO/VEČER 06:00-09:00 + 19:00-22:00
+      - name: "T4 aktívna"
+        unique_id: t4_aktivna
+        state: >
+          {% if not is_state('input_boolean.tariff_system_enabled', 'on') %}
+            false
+          {% else %}
+            {% set now_time = now().strftime('%H:%M') %}
+            {% set t4_morning_start = states('input_datetime.tariff_t4_morning_start')[:5] %}
+            {% set t4_morning_end = states('input_datetime.tariff_t4_morning_end')[:5] %}
+            {% set t4_evening_start = states('input_datetime.tariff_t4_evening_start')[:5] %}
+            {% set t4_evening_end = states('input_datetime.tariff_t4_evening_end')[:5] %}
+            {% set morning = t4_morning_start <= now_time < t4_morning_end %}
+            {% set evening = t4_evening_start <= now_time < t4_evening_end %}
+            {{ morning or evening }}
+          {% endif %}
+        device_class: power
+        icon: mdi:alert-circle
+        attributes:
+          friendly_name: "T4 Ráno/Večer"
+          time_range: "06:00-09:00 + 19:00-22:00"
+          price_week: "{{ states('input_number.tariff_t4_price') }} EUR/kWh"
+          price_weekend: "{{ states('input_number.tariff_t4_price_weekend') }} EUR/kWh"
+  
+  - sensor:
+      # ========================================
+      # AKTUÁLNA TARIFA - HLAVNÝ SENSOR
+      # ========================================
+      - name: "Aktuálna tarifa"
+        unique_id: aktualna_tarifa_4T
+        state: >
+          {% if is_state('binary_sensor.t1_aktivna', 'on') %}
+            T1
+          {% elif is_state('binary_sensor.t2_aktivna', 'on') %}
+            T2
+          {% elif is_state('binary_sensor.t3_aktivna', 'on') %}
+            T3
+          {% elif is_state('binary_sensor.t4_aktivna', 'on') %}
+            T4
+          {% else %}
+            Unknown
+          {% endif %}
+        icon: >
+          {% if is_state('binary_sensor.t1_aktivna', 'on') %}
+            mdi:weather-night
+          {% elif is_state('binary_sensor.t2_aktivna', 'on') %}
+            mdi:weather-sunset-down
+          {% elif is_state('binary_sensor.t3_aktivna', 'on') %}
+            mdi:weather-sunny
+          {% elif is_state('binary_sensor.t4_aktivna', 'on') %}
+            mdi:alert-circle
+          {% else %}
+            mdi:help-circle
+          {% endif %}
+        attributes:
+          je_vikend: "{{ is_state('binary_sensor.je_vikend', 'on') }}"
+          price_eur_kwh: >
+            {% set weekend = is_state('binary_sensor.je_vikend', 'on') %}
+            {% if is_state('binary_sensor.t1_aktivna', 'on') %}
+              {% if weekend %}
+                {{ states('input_number.tariff_t1_price_weekend') | float(0.11252) }}
+              {% else %}
+                {{ states('input_number.tariff_t1_price') | float(0.12015) }}
+              {% endif %}
+            {% elif is_state('binary_sensor.t2_aktivna', 'on') %}
+              {% if weekend %}
+                {{ states('input_number.tariff_t2_price_weekend') | float(0.15641) }}
+              {% else %}
+                {{ states('input_number.tariff_t2_price') | float(0.17002) }}
+              {% endif %}
+            {% elif is_state('binary_sensor.t3_aktivna', 'on') %}
+              {% if weekend %}
+                {{ states('input_number.tariff_t3_price_weekend') | float(0.12249) }}
+              {% else %}
+                {{ states('input_number.tariff_t3_price') | float(0.13148) }}
+              {% endif %}
+            {% elif is_state('binary_sensor.t4_aktivna', 'on') %}
+              {% if weekend %}
+                {{ states('input_number.tariff_t4_price_weekend') | float(0.20492) }}
+              {% else %}
+                {{ states('input_number.tariff_t4_price') | float(0.22514) }}
+              {% endif %}
+            {% else %}
+              0
+            {% endif %}
+          time_range: >
+            {% if is_state('binary_sensor.t1_aktivna', 'on') %}
+              22:00 - 06:00
+            {% elif is_state('binary_sensor.t2_aktivna', 'on') %}
+              13:00 - 19:00
+            {% elif is_state('binary_sensor.t3_aktivna', 'on') %}
+              09:00 - 13:00
+            {% elif is_state('binary_sensor.t4_aktivna', 'on') %}
+              06:00-09:00, 19:00-22:00
+            {% else %}
+              Unknown
+            {% endif %}
+
+      # ========================================
+      # AKTUÁLNA CENA - EUR/kWh (s distribúciou a DPH)
+      # Automaticky zohľadňuje víkend
+      # ========================================
+      - name: "Aktuálna cena kWh"
+        unique_id: aktualna_cena_kwh
+        state: >
+          {{ state_attr('sensor.aktualna_tarifa', 'price_eur_kwh') | float(0) | round(5) }}
+        unit_of_measurement: "EUR/kWh"
+        icon: mdi:currency-eur
+        attributes:
+          typ_dna: >
+            {% if is_state('binary_sensor.je_vikend', 'on') %}
+              víkend
+            {% else %}
+              pracovný deň
+            {% endif %}
+          tarifa: "{{ states('sensor.aktualna_tarifa') }}"
+
+      # ========================================
+      # NÁKLADY SPOTREBIČOV - TEMPLATE SENSORS
+      # ========================================
+      
+      # Klíma - aktuálny príkon v kW (pre výpočet nákladov)
+      - name: "Klíma príkon kW"
+        unique_id: klima_prikon_kw
+        state: >
+          {% set energy_today = states('sensor.klima_cojirbfaaai_today_energy_consumption') | float(0) %}
+          {% set work_time_min = states('sensor.klima_cojirbfaaai_today_work_time') | float(0) %}
+          {% if work_time_min > 0 %}
+            {{ (energy_today / (work_time_min / 60)) | round(3) }}
+          {% else %}
+            0
+          {% endif %}
+        unit_of_measurement: "kW"
+        device_class: power
+        icon: mdi:air-conditioner
+
+      # Denné náklady - Klíma (priebežný výpočet)
+      - name: "Klíma denné náklady"
+        unique_id: klima_denne_naklady
+        state: "{{ states('input_number.cost_daily_klima') | float(0) | round(3) }}"
+        unit_of_measurement: "EUR"
+        icon: mdi:air-conditioner
+
+      # Denné náklady - Bojler Dražice
+      - name: "Dražice denné náklady"
+        unique_id: drazice_denne_naklady
+        state: "{{ states('input_number.cost_daily_bojler_drazice') | float(0) | round(3) }}"
+        unit_of_measurement: "EUR"
+        icon: mdi:water-boiler
+
+      # Denné náklady - Bojler Ariston
+      - name: "Ariston denné náklady"
+        unique_id: ariston_denne_naklady
+        state: "{{ states('input_number.cost_daily_bojler_ariston') | float(0) | round(3) }}"
+        unit_of_measurement: "EUR"
+        icon: mdi:water-boiler-alert
+
+      # Mesačné náklady - Klíma
+      - name: "Klíma mesačné náklady"
+        unique_id: klima_mesacne_naklady
+        state: "{{ states('input_number.cost_monthly_klima') | float(0) | round(2) }}"
+        unit_of_measurement: "EUR"
+        icon: mdi:air-conditioner
+
+      # Mesačné náklady - Bojler Dražice
+      - name: "Dražice mesačné náklady"
+        unique_id: drazice_mesacne_naklady
+        state: "{{ states('input_number.cost_monthly_bojler_drazice') | float(0) | round(2) }}"
+        unit_of_measurement: "EUR"
+        icon: mdi:water-boiler
+
+      # Mesačné náklady - Bojler Ariston
+      - name: "Ariston mesačné náklady"
+        unique_id: ariston_mesacne_naklady
+        state: "{{ states('input_number.cost_monthly_bojler_ariston') | float(0) | round(2) }}"
+        unit_of_measurement: "EUR"
+        icon: mdi:water-boiler-alert
+
+      # Celkové denné náklady spotrebičov
+      - name: "Celkové denné náklady spotrebičov"
+        unique_id: celkove_denne_naklady
+        state: >
+          {% set klima = states('input_number.cost_daily_klima') | float(0) %}
+          {% set drazice = states('input_number.cost_daily_bojler_drazice') | float(0) %}
+          {% set ariston = states('input_number.cost_daily_bojler_ariston') | float(0) %}
+          {{ (klima + drazice + ariston) | round(3) }}
+        unit_of_measurement: "EUR"
+        icon: mdi:sigma
+
+  - binary_sensor:
+      # Dražice dosiahol cieľovú teplotu
+      - name: "Dražice zohriaty"
+        unique_id: drazice_zohriaty
+        state: >
+          {% set current = state_attr('climate.drazitherm', 'current_temperature') | float(0) %}
+          {% set target = state_attr('climate.drazitherm', 'temperature') | float(45) %}
+          {{ current >= target }}
+        icon: >
+          {% if is_state('binary_sensor.drazice_zohriaty', 'on') %}
+            mdi:check-circle
+          {% else %}
+            mdi:heating
+          {% endif %}
+        attributes:
+          current_temp: "{{ state_attr('climate.drazitherm', 'current_temperature') }}"
+          target_temp: "{{ state_attr('climate.drazitherm', 'temperature') }}"
+      
+      # Dražice potrebuje núdzové ohrev (pod 38°C)
+      - name: "Dražice vynútený režim potrebný"
+        unique_id: drazice_forced_needed
+        state: >
+          {% set current = state_attr('climate.drazitherm', 'current_temperature') | float(50) %}
+          {% set forced_temp = states('input_number.bojler_drazice_temp_forced') | float(38) %}
+          {{ current < forced_temp }}
+        icon: mdi:alert-circle
+  
+  - sensor:
+      # Odporúčaný režim pre Dražice
+      - name: "Dražice odporúčaný režim"
+        unique_id: drazice_recommended_mode
+        state: >
+          {% set surplus = states('sensor.active_power') | float(0) %}
+          {% set threshold_boost = states('input_number.bojler_drazice_surplus_threshold_boost') | float(2500) %}
+          {% set current_temp = state_attr('climate.drazitherm', 'current_temperature') | float(50) %}
+          {% set forced_temp = states('input_number.bojler_drazice_temp_forced') | float(38) %}
+          
+          {# PRIORITA 1: Vynútený režim ak je príliš studená voda #}
+          {% if current_temp < forced_temp %}
+            FORCED
+          
+          {# PRIORITA 2: BOOST pri prebytkoch #}
+          {% elif surplus > threshold_boost and is_state('input_boolean.bojler_drazice_enable_surplus', 'on') %}
+            BOOST
+          
+          {# PRIORITA 3: NORMAL pri T1 #}
+          {% elif is_state('binary_sensor.t1_aktivna', 'on') and is_state('input_boolean.bojler_drazice_enable_t1', 'on') %}
+            NORMAL
+          
+          {# PRIORITA 4: NORMAL pri T2 ak je povolené #}
+          {% elif is_state('binary_sensor.t2_aktivna', 'on') and is_state('input_boolean.bojler_drazice_enable_t2', 'on') %}
+            NORMAL
+          
+          {# PRIORITA 5: NORMAL pri T3 ak je povolené #}
+          {% elif is_state('binary_sensor.t3_aktivna', 'on') and is_state('input_boolean.bojler_drazice_enable_t3', 'on') %}
+            NORMAL
+          
+          {# Inak udržuj FORCED minimum #}
+          {% else %}
+            FORCED
+          {% endif %}
+        icon: >
+          {% if is_state('sensor.drazice_odporucany_rezim', 'BOOST') %}
+            mdi:thermometer-high
+          {% elif is_state('sensor.drazice_odporucany_rezim', 'NORMAL') %}
+            mdi:thermometer
+          {% elif is_state('sensor.drazice_odporucany_rezim', 'FORCED') %}
+            mdi:thermometer-low
+          {% else %}
+            mdi:thermometer-off
+          {% endif %}
+        attributes:
+          target_temperature: >
+            {% if is_state('sensor.drazice_odporucany_rezim', 'BOOST') %}
+              {{ states('input_number.bojler_drazice_temp_boost') }}
+            {% elif is_state('sensor.drazice_odporucany_rezim', 'NORMAL') %}
+              {{ states('input_number.bojler_drazice_temp_normal') }}
+            {% elif is_state('sensor.drazice_odporucany_rezim', 'FORCED') %}
+              {{ states('input_number.bojler_drazice_temp_forced') }}
+            {% else %}
+              0
+            {% endif %}
+          reason: >
+            {% set surplus = states('sensor.active_power') | float(0) %}
+            {% set current_temp = state_attr('climate.drazitherm', 'current_temperature') | float(50) %}
+            {% set forced_temp = states('input_number.bojler_drazice_temp_forced') | float(38) %}
+            
+            {% if current_temp < forced_temp %}
+              Teplota pod {{ forced_temp }}°C - núdzový ohrev
+            {% elif surplus > states('input_number.bojler_drazice_surplus_threshold_boost') | float(2500) %}
+              Prebytky {{ surplus }}W - BOOST režim
+            {% elif is_state('binary_sensor.t1_aktivna', 'on') %}
+              T1 tarifa aktívna - normálny ohrev
+            {% elif is_state('binary_sensor.t2_aktivna', 'on') %}
+              T2 tarifa aktívna - normálny ohrev
+            {% else %}
+              Udržiavací režim
+            {% endif %}

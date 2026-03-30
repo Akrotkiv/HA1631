@@ -1,0 +1,19 @@
+=============================================
+  EV NABIJANIE - ROCNY REPORT 2026
+=============================================
+
+  Sessions:    133
+  Energia:     1227.211 kWh
+    prebytky:  0.000 kWh (0.0%)
+  Naklady:     140.919 EUR
+  Uspora:      0.000 EUR
+  Cas:         15549 min (259.2 h)
+
+--- Mesiace ---
+  2026-01: 34x, 324.679 kWh (prebytky: 0.000), 47.669 EUR, 4229 min
+  2026-02: 40x, 291.177 kWh (prebytky: 0.000), 39.463 EUR, 3877 min
+  2026-03: 59x, 611.355 kWh (prebytky: 0.000), 53.787 EUR, 7443 min
+
+--- Pouzivatelia ---
+  mysan: 127x, 1138.889 kWh (prebytky: 0.000), 134.779 EUR
+  vojtesla: 6x, 88.322 kWh (prebytky: 0.000), 6.140 EUR
