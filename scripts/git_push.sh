@@ -4,9 +4,8 @@ LOG="/config/www/git_push.log"
 
 echo "$(date '+%Y-%m-%d %H:%M:%S') - START" > "$LOG"
 
-git add -A 2>&1 >> "$LOG"
+git add -A >> "$LOG" 2>&1
 
-# Skontroluj či je čo commitnúť
 if git diff --cached --quiet; then
   echo "Nič na commit - žiadne zmeny" >> "$LOG"
   echo "STATUS:no_changes" >> "$LOG"
@@ -16,12 +15,15 @@ fi
 MSG="${1:-auto update $(date +%Y-%m-%d_%H:%M)}"
 echo "Commit message: $MSG" >> "$LOG"
 
-git commit -m "$MSG" 2>&1 >> "$LOG"
-git push origin main 2>&1 >> "$LOG"
+git commit -m "$MSG" >> "$LOG" 2>&1
+PUSH_OUTPUT=$(git push origin main 2>&1)
+PUSH_EXIT=$?
+echo "$PUSH_OUTPUT" >> "$LOG"
 
-if [ $? -eq 0 ]; then
+if [ $PUSH_EXIT -eq 0 ]; then
   echo "STATUS:ok" >> "$LOG"
 else
+  echo "PUSH_EXIT_CODE: $PUSH_EXIT" >> "$LOG"
   echo "STATUS:error" >> "$LOG"
 fi
 
