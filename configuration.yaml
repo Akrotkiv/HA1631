@@ -345,6 +345,15 @@ input_select:
     initial: "none"
     icon: mdi:help-circle
 
+input_text:
+  git_commit_message:
+    name: "Git - Popis zmeny"
+    max: 100
+    icon: mdi:source-commit
+    initial: ""
+
+
+
 # ========================================
 # NASTAVITEĽNÉ CENY A PRAHY
 # ========================================
@@ -735,6 +744,10 @@ input_number:
     mode: slider
     icon: mdi:fan
 
+shell_command:
+  git_push_config: '/config/scripts/git_push.sh "{{ message }}"'
+  git_export_dashboard: '/config/scripts/export_dashboard.sh'
+  
 
 # ================================
 # TEMPLATE SENSORY PRE TARÍFNY SYSTÉM

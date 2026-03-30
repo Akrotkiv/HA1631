@@ -1,3 +1,28 @@
+# PUSH to GitHub
+
+git_push:
+  alias: "Git - Push config"
+  mode: single
+  sequence:
+    # Najprv exportuj dashboard
+    - service: shell_command.git_export_dashboard
+    - delay: 2
+    # Potom push
+    - service: shell_command.git_push_config
+      data:
+        message: "{{ states('input_text.git_commit_message') if states('input_text.git_commit_message') | length > 0 else 'dashboard update ' ~ now().strftime('%Y-%m-%d %H:%M') }}"
+    # Vyčisti input
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.git_commit_message
+      data:
+        value: ""
+    - service: logbook.log
+      data:
+        name: "Git"
+        message: "✅ Config pushed to GitHub"
+
+
 # AKVÁRIUM - Script pre ovládanie svetla
 # Pridaj tieto riadky do existujúceho scripts.yaml súboru
 

@@ -25,3 +25,5 @@ zigbee2mqtt/
 
 # Ostatné
 .HA_VERSION
+*.log.*
+*.log.*
