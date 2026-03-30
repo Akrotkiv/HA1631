@@ -2,6 +2,8 @@
 cd /config
 LOG="/config/www/git_push.log"
 
+export GIT_SSH_COMMAND="ssh -i /root/.ssh/ha_github -o StrictHostKeyChecking=accept-new"
+
 echo "$(date '+%Y-%m-%d %H:%M:%S') - START" > "$LOG"
 
 git add -A >> "$LOG" 2>&1
@@ -16,14 +18,11 @@ MSG="${1:-auto update $(date +%Y-%m-%d_%H:%M)}"
 echo "Commit message: $MSG" >> "$LOG"
 
 git commit -m "$MSG" >> "$LOG" 2>&1
-PUSH_OUTPUT=$(git push origin main 2>&1)
-PUSH_EXIT=$?
-echo "$PUSH_OUTPUT" >> "$LOG"
+git push origin main >> "$LOG" 2>&1
 
-if [ $PUSH_EXIT -eq 0 ]; then
+if [ $? -eq 0 ]; then
   echo "STATUS:ok" >> "$LOG"
 else
-  echo "PUSH_EXIT_CODE: $PUSH_EXIT" >> "$LOG"
   echo "STATUS:error" >> "$LOG"
 fi
 
