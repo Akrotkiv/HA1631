@@ -1056,6 +1056,10 @@
                     "service": "script.git_push"
                   },
                   "action_name": "PUSH"
+                },
+                {
+                  "entity": "sensor.git_push_status",
+                  "name": "Posledný výsledok"
                 }
               ]
             }

@@ -743,6 +743,25 @@ input_number:
     step: 1
     mode: slider
     icon: mdi:fan
+    
+command_line:
+  - sensor:
+      name: "Git Push Status"
+      unique_id: git_push_status
+      command: "tail -1 /config/www/git_push.log 2>/dev/null || echo 'STATUS:unknown'"
+      scan_interval: 10
+      value_template: >
+        {% set line = value %}
+        {% if 'STATUS:ok' in line %}
+          ✅ Úspešne pushnuté
+        {% elif 'STATUS:no_changes' in line %}
+          ℹ️ Žiadne zmeny
+        {% elif 'STATUS:error' in line %}
+          ❌ Chyba pri push
+        {% else %}
+          {{ line }}
+        {% endif %}
+      icon: mdi:github
 
 shell_command:
   git_push_config: '/config/scripts/git_push.sh "{{ message }}"'
