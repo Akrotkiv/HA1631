@@ -98,13 +98,16 @@ def generate_xlsx():
     brd = Border(left=Side(style='thin'),right=Side(style='thin'),top=Side(style='thin'),bottom=Side(style='thin'))
     
     headers = ['Datum','Cas','Pouzivatel','Energia (kWh)','Naklady (EUR)',
-               'Tarifa','Trvanie (min)','Dovod']
+               'Tarifa','Trvanie (min)','Dovod',
+               'Prebytky (kWh)','Siet (kWh)','Uspora (EUR)']
     for c, h in enumerate(headers, 1):
         cell = ws.cell(row=1, column=c, value=h)
         cell.font = hf
         cell.fill = hfill
         cell.alignment = Alignment(horizontal='center')
         cell.border = brd
+    
+    sfill = PatternFill(start_color="FFF3E0", end_color="FFF3E0", fill_type="solid")
     
     for ri, s in enumerate(sessions, 2):
         dt = s.get('start_dt')
@@ -116,23 +119,29 @@ def generate_xlsx():
             s['cost_eur'],
             s.get('tariff',''),
             s['duration_min'],
-            s.get('stop_reason','')
+            s.get('stop_reason',''),
+            s['surplus_energy_kwh'],
+            s['grid_energy_kwh'],
+            s['surplus_value_eur']
         ]
         for ci, v in enumerate(vals, 1):
             cell = ws.cell(row=ri, column=ci, value=v)
             cell.border = brd
-            if ci in (4, 5):
+            if ci in (4, 5, 9, 10, 11):
                 cell.number_format = '0.000'
+            if ci in (9, 11) and isinstance(v, (int, float)) and v > 0:
+                cell.fill = sfill
     
     # Sucet riadok
     sr = len(sessions) + 2
     ws.cell(row=sr, column=3, value="SPOLU:").font = Font(bold=True)
-    for ci, k in [(4,'energy_kwh'), (5,'cost_eur'), (7,'duration_min')]:
+    for ci, k in [(4,'energy_kwh'), (5,'cost_eur'), (7,'duration_min'),
+                   (9,'surplus_energy_kwh'), (10,'grid_energy_kwh'), (11,'surplus_value_eur')]:
         c = ws.cell(row=sr, column=ci, value=round(sum(s[k] for s in sessions), 3))
         c.font = Font(bold=True)
     
     # Sirky stlpcov
-    for i, w in enumerate([12, 8, 14, 14, 14, 8, 12, 16]):
+    for i, w in enumerate([12, 8, 14, 14, 14, 8, 12, 16, 14, 14, 14]):
         ws.column_dimensions[chr(65+i)].width = w
     
     # Sheet 2: Mesacny prehlad

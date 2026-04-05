@@ -1823,17 +1823,9 @@
                   "show_state": false
                 },
                 {
-                  "type": "horizontal-stack",
-                  "cards": []
-                },
-                {
-                  "type": "button",
-                  "name": "📊 Stiahnuť XLSX report",
-                  "icon": "mdi:file-excel",
-                  "tap_action": {
-                    "action": "url",
-                    "url_path": "/local/ev_charging_sessions.xlsx"
-                  }
+                  "type": "markdown",
+                  "content": "<a href=\"/local/ev_charging_sessions.xlsx?t={{ as_timestamp(now()) | int }}\" download=\"ev_sessions.xlsx\" target=\"_blank\">📊 Stiahnuť XLSX report</a>",
+                  "title": "Report"
                 },
                 {
                   "type": "entities",

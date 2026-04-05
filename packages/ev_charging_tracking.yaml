@@ -138,6 +138,34 @@ input_number:
     mode: slider
     initial: 80
 
+  # Prebytky počas nabíjania
+  ev_session_surplus_energy:
+    name: "EV - Energia z prebytkov (kWh)"
+    min: 0
+    max: 1000
+    step: 0.001
+    unit_of_measurement: "kWh"
+    icon: mdi:solar-power
+    mode: box
+
+  ev_session_grid_energy:
+    name: "EV - Energia zo siete (kWh)"
+    min: 0
+    max: 1000
+    step: 0.001
+    unit_of_measurement: "kWh"
+    icon: mdi:transmission-tower
+    mode: box
+
+  ev_session_surplus_value:
+    name: "EV - Hodnota prebytkov (EUR)"
+    min: 0
+    max: 1000
+    step: 0.001
+    unit_of_measurement: "EUR"
+    icon: mdi:piggy-bank
+    mode: box
+
 input_datetime:
   # Čas začiatku session
   ev_session_start_time:
@@ -208,21 +236,11 @@ input_boolean:
 
 template:
   - sensor:
-      # Aktuálna cena tarifu v EUR/kWh
+      # Aktuálna cena tarifu v EUR/kWh - z hlavného tarifného systému
       - name: "EV Aktuálna cena kWh"
         unique_id: ev_aktualna_cena_kwh
         state: >
-          {% if is_state('binary_sensor.t1_aktivna', 'on') %}
-            {{ (states('input_number.tariff_t1_price') | float(56.81) / 1000) | round(5) }}
-          {% elif is_state('binary_sensor.t2_aktivna', 'on') %}
-            {{ (states('input_number.tariff_t2_price') | float(67.29) / 1000) | round(5) }}
-          {% elif is_state('binary_sensor.t3_aktivna', 'on') %}
-            {{ (states('input_number.tariff_t3_price') | float(75.15) / 1000) | round(5) }}
-          {% elif is_state('binary_sensor.t4_aktivna', 'on') %}
-            {{ (states('input_number.tariff_t4_price') | float(105.11) / 1000) | round(5) }}
-          {% else %}
-            {{ (states('input_number.tariff_t1_price') | float(56.81) / 1000) | round(5) }}
-          {% endif %}
+          {{ state_attr('sensor.aktualna_tarifa', 'price_eur_kwh') | float(0) | round(5) }}
         unit_of_measurement: "EUR/kWh"
         icon: mdi:currency-eur
       
@@ -268,6 +286,58 @@ template:
         unit_of_measurement: "kW"
         device_class: power
         icon: mdi:flash
+
+      # Podiel prebytkov na nabíjaní (%)
+      - name: "EV Podiel prebytkov"
+        unique_id: ev_podiel_prebytkov
+        state: >
+          {% if is_state('input_boolean.ev_charging_active', 'on') %}
+            {% set charging_power = states('sensor.ev_charging_power') | float(0) * 1000 %}
+            {% set grid_export = states('sensor.active_power') | float(0) %}
+            {% if charging_power > 0 %}
+              {% set surplus_power = [charging_power + grid_export, charging_power, 0] | sort %}
+              {{ ((surplus_power[1] / charging_power) * 100) | round(1) }}
+            {% else %}
+              0
+            {% endif %}
+          {% else %}
+            0
+          {% endif %}
+        unit_of_measurement: "%"
+        icon: mdi:solar-power
+
+      # Výkon z prebytkov (W)
+      - name: "EV Výkon z prebytkov"
+        unique_id: ev_vykon_z_prebytkov
+        state: >
+          {% if is_state('input_boolean.ev_charging_active', 'on') %}
+            {% set charging_power = states('sensor.ev_charging_power') | float(0) * 1000 %}
+            {% set grid_export = states('sensor.active_power') | float(0) %}
+            {% if charging_power > 0 %}
+              {% set surplus_power = [charging_power + grid_export, charging_power, 0] | sort %}
+              {{ surplus_power[1] | round(0) }}
+            {% else %}
+              0
+            {% endif %}
+          {% else %}
+            0
+          {% endif %}
+        unit_of_measurement: "W"
+        icon: mdi:solar-power
+
+      # Výkon zo siete (W)
+      - name: "EV Výkon zo siete"
+        unique_id: ev_vykon_zo_siete
+        state: >
+          {% if is_state('input_boolean.ev_charging_active', 'on') %}
+            {% set charging_power = states('sensor.ev_charging_power') | float(0) * 1000 %}
+            {% set surplus = states('sensor.ev_vykon_z_prebytkov') | float(0) %}
+            {{ (charging_power - surplus) | round(0) }}
+          {% else %}
+            0
+          {% endif %}
+        unit_of_measurement: "W"
+        icon: mdi:transmission-tower
       
       # Stav nabíjačky (zjednodušený)
       - name: "EV Charger Status Simple"
@@ -330,11 +400,11 @@ notify:
 # ================================
 
 shell_command:
-  # Zápis session do CSV súboru pomocou bash scriptu
-  ev_log_session: '/config/scripts/log_ev_session.sh "{{ session_id }}" "{{ start_time }}" "{{ end_time }}" "{{ user }}" "{{ energy_kwh }}" "{{ cost_eur }}" "{{ tariff }}" "{{ stop_reason }}" "{{ duration_min }}"'
+  # Zápis session do CSV - 12 stĺpcov (s prebytkami)
+  ev_log_session: '/config/scripts/log_ev_session.sh "{{ session_id }}" "{{ start_time }}" "{{ end_time }}" "{{ user }}" "{{ energy_kwh }}" "{{ cost_eur }}" "{{ tariff }}" "{{ stop_reason }}" "{{ duration_min }}" "{{ surplus_energy }}" "{{ grid_energy }}" "{{ surplus_value }}"'
   
   # Vytvorenie hlavičky CSV ak neexistuje
-  ev_create_csv_header: '[ ! -f /config/ev_charging_sessions.csv ] && echo "session_id,start_time,end_time,user,energy_kwh,cost_eur,tariff,stop_reason,duration_min" > /config/ev_charging_sessions.csv || true'
+  ev_create_csv_header: '[ ! -f /config/ev_charging_sessions.csv ] && echo "session_id,start_time,end_time,user,energy_kwh,cost_eur,tariff,stop_reason,duration_min,surplus_energy_kwh,grid_energy_kwh,surplus_value_eur" > /config/ev_charging_sessions.csv || true'
   
   # Kopírovanie CSV do www pre download
   ev_copy_csv_to_www: 'mkdir -p /config/www && cp /config/ev_charging_sessions.csv /config/www/ev_charging_sessions.csv && chmod 644 /config/www/ev_charging_sessions.csv'
@@ -342,12 +412,14 @@ shell_command:
   # Refresh CSV pred downloadom
   ev_refresh_csv: 'cp /config/ev_charging_sessions.csv /config/www/ev_charging_sessions.csv 2>/dev/null; chmod 644 /config/www/ev_charging_sessions.csv 2>/dev/null || true'
   
+  # XLSX generovanie
+  ev_generate_xlsx: 'pip3 install openpyxl --break-system-packages -q 2>/dev/null; python3 /config/scripts/ev_generate_report.py xlsx 2>>/config/www/ev_xlsx_debug.log'
+  
   # Reporty
   ev_report_current_month: 'python3 /config/scripts/ev_charging_report.py'
   ev_report_month: 'python3 /config/scripts/ev_charging_report.py {{ month }}'
   ev_report_year: 'python3 /config/scripts/ev_charging_report.py --year {{ year }}'
   ev_report_all: 'python3 /config/scripts/ev_charging_report.py --all'
-  ev_generate_xlsx: 'pip3 install openpyxl --break-system-packages -q 2>/dev/null; python3 /config/scripts/ev_generate_report.py xlsx 2>>/config/www/ev_xlsx_debug.log'
 
 # ================================
 # SCRIPTS
@@ -420,6 +492,23 @@ script:
           entity_id: input_select.ev_session_stop_reason
         data:
           option: "none"
+
+      # Reset prebytkov
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.ev_session_surplus_energy
+        data:
+          value: 0
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.ev_session_grid_energy
+        data:
+          value: 0
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.ev_session_surplus_value
+        data:
+          value: 0
       
       # Vytvor CSV hlavičku ak neexistuje
       - service: shell_command.ev_create_csv_header
@@ -461,7 +550,7 @@ script:
             {% set start = states('input_datetime.ev_session_start_time') | as_timestamp %}
             {{ ((now().timestamp() - start) / 60) | round(1) }}
       
-      # Zapíš do CSV
+      # Zapíš do CSV (12 stĺpcov)
       - service: shell_command.ev_log_session
         data:
           session_id: "{{ states('input_text.ev_session_id') }}"
@@ -473,11 +562,12 @@ script:
           tariff: "{{ states('sensor.ev_aktualna_tarifa') }}"
           stop_reason: "{{ stop_reason | default('completed') }}"
           duration_min: "{{ duration_min }}"
+          surplus_energy: "{{ states('input_number.ev_session_surplus_energy') | round(3) }}"
+          grid_energy: "{{ states('input_number.ev_session_grid_energy') | round(3) }}"
+          surplus_value: "{{ states('input_number.ev_session_surplus_value') | round(3) }}"
       
-      # Skopíruj CSV do www pre download
+      # Skopíruj CSV + generuj XLSX
       - service: shell_command.ev_copy_csv_to_www
-      
-      # Generuj XLSX
       - delay:
           seconds: 2
       - service: shell_command.ev_generate_xlsx
@@ -507,15 +597,26 @@ script:
       - variables:
           current_meter: "{{ states('sensor.hacharger_energy_active_import_register') | float(0) }}"
           start_meter: "{{ states('input_number.ev_session_energy_start') | float(0) }}"
-          total_energy: "{{ (current_meter - start_meter) | round(3) }}"
+          total_energy: "{{ (current_meter | float(0) - start_meter | float(0)) | round(3) }}"
           price_kwh: "{{ states('sensor.ev_aktualna_cena_kwh') | float(0) }}"
           # Energia od posledného updatu
           last_energy: "{{ states('input_number.ev_session_energy_total') | float(0) }}"
-          energy_delta: "{{ (total_energy - last_energy) | round(3) }}"
-          # Náklady za delta energiu
-          cost_delta: "{{ (energy_delta * price_kwh) | round(5) }}"
-          # Celkové náklady
-          total_cost: "{{ (states('input_number.ev_session_cost_total') | float(0) + cost_delta) | round(3) }}"
+          energy_delta: "{{ (total_energy | float(0) - last_energy | float(0)) | round(3) }}"
+          # Výpočet podielu prebytkov
+          charging_power_w: "{{ states('sensor.ev_charging_power') | float(0) * 1000 }}"
+          surplus_power_w: "{{ states('sensor.ev_vykon_z_prebytkov') | float(0) }}"
+          surplus_ratio: >
+            {% if charging_power_w | float(0) > 0 %}
+              {{ (surplus_power_w | float(0) / charging_power_w | float(0)) | round(4) }}
+            {% else %}
+              0
+            {% endif %}
+          delta_surplus: "{{ (energy_delta | float(0) * surplus_ratio | float(0)) | round(4) }}"
+          delta_grid: "{{ (energy_delta | float(0) - delta_surplus | float(0)) | round(4) }}"
+          # Náklady len za sieťovú energiu
+          cost_delta: "{{ (delta_grid | float(0) * price_kwh | float(0)) | round(5) }}"
+          surplus_value_delta: "{{ (delta_surplus | float(0) * price_kwh | float(0)) | round(5) }}"
+          total_cost: "{{ (states('input_number.ev_session_cost_total') | float(0) + cost_delta | float(0)) | round(3) }}"
       
       - service: input_number.set_value
         target:
@@ -528,6 +629,23 @@ script:
           entity_id: input_number.ev_session_cost_total
         data:
           value: "{{ total_cost }}"
+
+      # Aktualizuj prebytky
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.ev_session_surplus_energy
+        data:
+          value: "{{ (states('input_number.ev_session_surplus_energy') | float(0) + delta_surplus | float(0)) | round(3) }}"
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.ev_session_grid_energy
+        data:
+          value: "{{ (states('input_number.ev_session_grid_energy') | float(0) + delta_grid | float(0)) | round(3) }}"
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.ev_session_surplus_value
+        data:
+          value: "{{ (states('input_number.ev_session_surplus_value') | float(0) + surplus_value_delta | float(0)) | round(3) }}"
 
   # Spracovanie zmeny tarifu počas nabíjania
   ev_handle_tariff_change:
