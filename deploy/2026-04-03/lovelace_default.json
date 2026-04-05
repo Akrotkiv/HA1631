@@ -1804,6 +1804,15 @@
                 },
                 {
                   "type": "button",
+                  "name": "📥 Stiahnuť CSV históriu",
+                  "icon": "mdi:download",
+                  "tap_action": {
+                    "action": "url",
+                    "url_path": "/local/ev_charging_sessions.xlsx"
+                  }
+                },
+                {
+                  "type": "button",
                   "name": "🔄 Manuálny štart session",
                   "icon": "mdi:play",
                   "tap_action": {
@@ -1813,18 +1822,57 @@
                   "show_state": false
                 },
                 {
-                  "type": "button",
-                  "name": "⏹️ Ukončiť session",
-                  "icon": "mdi:stop-circle",
-                  "tap_action": {
-                    "action": "call-service",
-                    "service": "script.ev_force_end_session"
-                  },
-                  "show_state": false
+                  "type": "horizontal-stack",
+                  "cards": [
+                    {
+                      "type": "button",
+                      "name": "🔄 Refresh XLSX",
+                      "icon": "mdi:refresh",
+                      "tap_action": {
+                        "action": "call-service",
+                        "service": "script.ev_refresh_csv_download"
+                      },
+                      "show_state": false
+                    },
+                    {
+                      "type": "button",
+                      "name": "📥 Stiahnuť CSV",
+                      "icon": "mdi:download",
+                      "tap_action": {
+                        "action": "url",
+                        "url_path": "/local/ev_charging_sessions.xlsx"
+                      }
+                    }
+                  ]
                 },
                 {
                   "type": "horizontal-stack",
-                  "cards": []
+                  "cards": [
+                    {
+                      "type": "button",
+                      "name": "📊 Mesačný report",
+                      "icon": "mdi:file-chart",
+                      "tap_action": {
+                        "action": "call-service",
+                        "service": "script.ev_generate_monthly_report"
+                      },
+                      "show_state": false
+                    },
+                    {
+                      "type": "button",
+                      "name": "📈 Ročný report",
+                      "icon": "mdi:chart-bar",
+                      "tap_action": {
+                        "action": "call-service",
+                        "service": "script.ev_generate_yearly_report"
+                      },
+                      "show_state": false
+                    }
+                  ]
+                },
+                {
+                  "type": "markdown",
+                  "content": "**📁 Reporty:** [Otvoriť reporty](/local/ev_reports/)\n"
                 },
                 {
                   "type": "button",

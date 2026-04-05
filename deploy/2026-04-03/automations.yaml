@@ -856,13 +856,11 @@
   id: ariston_manual_reset
   mode: single
 - alias: Ariston - Detekcia manuálneho zapnutia
-  description: Nastaví špeciálny stav pri manuálnom zapnutí Ariston bojlera (ignoruje reštart HA)
+  description: Nastaví špeciálny stav pri manuálnom zapnutí Ariston bojlera
   trigger:
   - platform: state
     entity_id: switch.pw_bojler_immax
     to: 'on'
-    for:
-      minutes: 5
   condition:
   - condition: state
     entity_id: input_select.bojler_ariston_start_reason

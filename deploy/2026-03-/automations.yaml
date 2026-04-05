@@ -754,16 +754,15 @@
   id: ariston_flexible_on
   mode: single
 - alias: Ariston - Flexibilné vypnutie
-  description: Vypína Ariston - pri prebytkoch po min.čase, pri tarife až keď príde zakázaná tarifa
+  description: Vypína Ariston podľa dôvodu zapnutia a podmienok
   trigger:
   - platform: state
     entity_id:
     - binary_sensor.t1_aktivna
     - binary_sensor.t2_aktivna
     - binary_sensor.t3_aktivna
-    - binary_sensor.t4_aktivna
-    to: 'on'
-    id: tariff_change
+    to: 'off'
+    id: tariff_end
   - platform: template
     value_template: '{{ states(''sensor.active_power'') | float(0) < states(''input_number.bojler_ariston_surplus_threshold_off'')
       | float(500) }}'
@@ -782,39 +781,29 @@
     - condition: state
       entity_id: input_select.bojler_ariston_start_reason
       state: manual
-  - condition: not
-    conditions:
-    - condition: state
-      entity_id: input_select.bojler_ariston_start_reason
-      state: none
+  - condition: template
+    value_template: '{% set start_time = states(''input_datetime.bojler_ariston_start_time'')
+      | as_timestamp %} {% set current_time = now().timestamp() %} {% set running_minutes
+      = (current_time - start_time) / 60 %} {% set min_time = states(''input_number.bojler_ariston_min_time'')
+      | float(15) %} {{ running_minutes >= min_time }}
+
+      '
   - condition: or
     conditions:
-    # SURPLUS: vypni po min_time keď prebytky klesnú
     - condition: and
       conditions:
       - condition: template
-        value_template: "{{ states('input_select.bojler_ariston_start_reason') in ['surplus', 'drazice_ready'] }}"
+        value_template: '{{ trigger.id == ''surplus_low'' }}'
       - condition: template
         value_template: '{{ states(''sensor.active_power'') | float(0) < states(''input_number.bojler_ariston_surplus_threshold_off'')
           | float(500) }}'
-      - condition: template
-        value_template: >
-          {% set start = states('input_datetime.bojler_ariston_start_time') | as_timestamp %}
-          {% set mins = (now().timestamp() - start) / 60 %}
-          {{ mins >= states('input_number.bojler_ariston_min_time') | float(15) }}
-    # TARIFA: vypni LEN keď príde zakázaná tarifa (žiadna z povolených nie je aktívna)
     - condition: and
       conditions:
       - condition: template
-        value_template: "{{ states('input_select.bojler_ariston_start_reason') in ['t1', 't2', 't3', 't4'] }}"
+        value_template: '{{ trigger.id == ''tariff_end'' }}'
       - condition: template
-        value_template: >
-          {% set t1_ok = is_state('binary_sensor.t1_aktivna', 'on') and is_state('input_boolean.bojler_ariston_enable_t1', 'on') %}
-          {% set t2_ok = is_state('binary_sensor.t2_aktivna', 'on') and is_state('input_boolean.bojler_ariston_enable_t2', 'on') %}
-          {% set t3_ok = is_state('binary_sensor.t3_aktivna', 'on') and is_state('input_boolean.bojler_ariston_enable_t3', 'on') %}
-          {% set surplus_ok = is_state('input_boolean.bojler_ariston_enable_surplus', 'on') and
-                              states('sensor.active_power') | float(0) > states('input_number.bojler_ariston_surplus_threshold_on') | float(2000) %}
-          {{ not (t1_ok or t2_ok or t3_ok or surplus_ok) }}
+        value_template: '{{ states(''sensor.active_power'') | float(0) < states(''input_number.bojler_ariston_surplus_threshold_on'')
+          | float(2000) }}'
   action:
   - service: switch.turn_off
     target:
@@ -856,13 +845,11 @@
   id: ariston_manual_reset
   mode: single
 - alias: Ariston - Detekcia manuálneho zapnutia
-  description: Nastaví špeciálny stav pri manuálnom zapnutí Ariston bojlera (ignoruje reštart HA)
+  description: Nastaví špeciálny stav pri manuálnom zapnutí Ariston bojlera
   trigger:
   - platform: state
     entity_id: switch.pw_bojler_immax
     to: 'on'
-    for:
-      minutes: 5
   condition:
   - condition: state
     entity_id: input_select.bojler_ariston_start_reason
@@ -1479,29 +1466,24 @@
 
 - id: vetranie_forced_off_activated
   alias: Vetranie - Forced OFF aktivované
-  description: Pri zapnutí forced_off uloží aktuálny stupeň a vypne vetranie na 0
+  description: Pri zapnutí forced_off okamžite vypne vetranie na stupeň 0
   trigger:
   - platform: state
     entity_id: input_boolean.vetranie_forced_off
     to: 'on'
   action:
-  - service: input_number.set_value
-    target:
-      entity_id: input_number.vetranie_stupen_pred_forced_off
-    data:
-      value: '{{ states(''input_number.vetranie_stupen'') | int(0) }}'
   - service: script.vetranie_nastav_stupen
     data:
       stupen: 0
   - service: logbook.log
     data:
       name: Vetranie
-      message: "🛑 Vynútené vypnutie vetrania (bol stupeň {{ states('input_number.vetranie_stupen_pred_forced_off') }})"
+      message: "🛑 Vynútené vypnutie vetrania - stupeň 0, automatizácia pozastavená"
   - service: persistent_notification.create
     data:
       title: "💨 Vetranie - Vynútené vypnutie"
       message: >
-        Vetranie je vynútene vypnuté (bol stupeň {{ states('input_number.vetranie_stupen_pred_forced_off') }}).
+        Vetranie je vynútene vypnuté.
         {% if is_state('input_boolean.vetranie_auto_restart_enabled', 'on') %}
         Automatický reštart o {{ states('input_datetime.vetranie_auto_restart_time') }}
         na stupeň {{ states('input_number.vetranie_auto_restart_stupen') | int }}.

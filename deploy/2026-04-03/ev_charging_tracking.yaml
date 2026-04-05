@@ -7,6 +7,12 @@
 #     packages:
 #       ev_charging: !include packages/ev_charging_tracking.yaml
 # ============================================
+# ZMENY:
+#   - Ceny teraz v EUR/kWh s distribúciou a DPH
+#   - Víkendové ceny automaticky
+#   - Sledovanie prebytkov počas nabíjania
+#   - Nabíjanie je MIMO Goodwe výpočtov
+# ============================================
 
 # ================================
 # INPUT HELPERS
@@ -33,6 +39,8 @@ input_select:
       - "tariff_change"
       - "error"
       - "ev_disconnected"
+      - "ha_restart"
+      - "new_session"
     initial: "none"
     icon: mdi:stop-circle
   
@@ -83,7 +91,7 @@ input_number:
     icon: mdi:lightning-bolt
     mode: box
   
-  # Akumulované náklady v session
+  # Akumulované náklady v session (len za energiu zo siete)
   ev_session_cost_total:
     name: "EV - Náklady session (EUR)"
     min: 0
@@ -112,7 +120,40 @@ input_number:
     unit_of_measurement: "EUR"
     icon: mdi:cash-clock
     mode: box
-  
+
+  # ========================================
+  # PREBYTKY POČAS NABÍJANIA
+  # ========================================
+  # Energia z prebytkov v session (kWh)
+  ev_session_surplus_energy:
+    name: "EV - Energia z prebytkov (kWh)"
+    min: 0
+    max: 1000
+    step: 0.001
+    unit_of_measurement: "kWh"
+    icon: mdi:solar-power
+    mode: box
+
+  # Energia zo siete v session (kWh)
+  ev_session_grid_energy:
+    name: "EV - Energia zo siete (kWh)"
+    min: 0
+    max: 1000
+    step: 0.001
+    unit_of_measurement: "kWh"
+    icon: mdi:transmission-tower
+    mode: box
+
+  # Hodnota prebytkov v session (EUR) - koľko by stáli keby boli zo siete
+  ev_session_surplus_value:
+    name: "EV - Hodnota prebytkov (EUR)"
+    min: 0
+    max: 1000
+    step: 0.001
+    unit_of_measurement: "EUR"
+    icon: mdi:piggy-bank
+    mode: box
+
   # ========================================
   # SCHEDULED CHARGING - Max prúd
   # ========================================
@@ -124,19 +165,25 @@ input_number:
     unit_of_measurement: "A"
     icon: mdi:current-ac
     mode: slider
-  
-  # ========================================
-  # SOC LIMIT - Limit nabíjania
-  # ========================================
+
+  # Trvanie poslednej session (pre zobrazenie po reštarte)
+  ev_last_session_duration_min:
+    name: "EV - Posledná session trvanie (min)"
+    min: 0
+    max: 10000
+    step: 0.1
+    unit_of_measurement: "min"
+    icon: mdi:timer-outline
+    mode: box
+
   ev_soc_limit:
-    name: "EV - SOC Limit"
+    name: "EV - Zastaviť pri SOC (%)"
     min: 50
     max: 100
     step: 5
     unit_of_measurement: "%"
     icon: mdi:battery-charging-80
     mode: slider
-    initial: 80
 
 input_datetime:
   # Čas začiatku session
@@ -194,13 +241,10 @@ input_boolean:
   ev_scheduled_set_current:
     name: "EV - Nastaviť prúd pri štarte"
     icon: mdi:current-ac
-  
-  # ========================================
-  # SOC LIMIT - Zapnutie limitu
-  # ========================================
+
   ev_soc_limit_enabled:
     name: "EV - SOC Limit aktívny"
-    icon: mdi:battery-lock
+    icon: mdi:battery-charging-80
 
 # ================================
 # TEMPLATE SENSORS
@@ -208,23 +252,18 @@ input_boolean:
 
 template:
   - sensor:
-      # Aktuálna cena tarifu v EUR/kWh
+      # ========================================
+      # AKTUÁLNA CENA PRE EV (EUR/kWh s distribúciou a DPH)
+      # Automaticky zohľadňuje víkend
+      # ========================================
       - name: "EV Aktuálna cena kWh"
         unique_id: ev_aktualna_cena_kwh
         state: >
-          {% if is_state('binary_sensor.t1_aktivna', 'on') %}
-            {{ (states('input_number.tariff_t1_price') | float(56.81) / 1000) | round(5) }}
-          {% elif is_state('binary_sensor.t2_aktivna', 'on') %}
-            {{ (states('input_number.tariff_t2_price') | float(67.29) / 1000) | round(5) }}
-          {% elif is_state('binary_sensor.t3_aktivna', 'on') %}
-            {{ (states('input_number.tariff_t3_price') | float(75.15) / 1000) | round(5) }}
-          {% elif is_state('binary_sensor.t4_aktivna', 'on') %}
-            {{ (states('input_number.tariff_t4_price') | float(105.11) / 1000) | round(5) }}
-          {% else %}
-            {{ (states('input_number.tariff_t1_price') | float(56.81) / 1000) | round(5) }}
-          {% endif %}
+          {{ state_attr('sensor.aktualna_tarifa', 'price_eur_kwh') | float(0) | round(5) }}
         unit_of_measurement: "EUR/kWh"
         icon: mdi:currency-eur
+        attributes:
+          je_vikend: "{{ is_state('binary_sensor.je_vikend', 'on') }}"
       
       # Aktuálna tarifa pre EV
       - name: "EV Aktuálna tarifa"
@@ -255,7 +294,10 @@ template:
             {% set minutes = ((duration % 3600) // 60) | int %}
             {{ '%02d:%02d' | format(hours, minutes) }}
           {% else %}
-            00:00
+            {% set mins = states('input_number.ev_last_session_duration_min') | float(0) %}
+            {% set hours = (mins // 60) | int %}
+            {% set minutes = (mins % 60) | int %}
+            {{ '%02d:%02d' | format(hours, minutes) }}
           {% endif %}
         icon: mdi:timer-outline
       
@@ -268,7 +310,67 @@ template:
         unit_of_measurement: "kW"
         device_class: power
         icon: mdi:flash
-      
+
+      # ========================================
+      # PREBYTKY POČAS NABÍJANIA - REAL-TIME
+      # ========================================
+      # Aktuálny podiel prebytkov na nabíjaní (%)
+      - name: "EV Podiel prebytkov"
+        unique_id: ev_podiel_prebytkov
+        state: >
+          {% if is_state('input_boolean.ev_charging_active', 'on') %}
+            {% set charging_power = states('sensor.ev_charging_power') | float(0) * 1000 %}
+            {% set grid_export = states('sensor.active_power') | float(0) %}
+            {# active_power > 0 = prebytky (export), < 0 = odber zo siete #}
+            {# Ak sú prebytky aj počas nabíjania, časť nabíjania je z prebytkov #}
+            {# surplus_for_ev = min(charging_power, charging_power + grid_export) ak grid_export > 0 #}
+            {# Ak grid_export < 0 (odber), surplus = max(0, charging_power + grid_export) #}
+            {% if charging_power > 0 %}
+              {% set surplus_power = [charging_power + grid_export, charging_power, 0] | sort %}
+              {% set surplus = surplus_power[1] %}
+              {{ ((surplus / charging_power) * 100) | round(1) }}
+            {% else %}
+              0
+            {% endif %}
+          {% else %}
+            0
+          {% endif %}
+        unit_of_measurement: "%"
+        icon: mdi:solar-power
+
+      # Aktuálny výkon z prebytkov (W)
+      - name: "EV Výkon z prebytkov"
+        unique_id: ev_vykon_z_prebytkov
+        state: >
+          {% if is_state('input_boolean.ev_charging_active', 'on') %}
+            {% set charging_power = states('sensor.ev_charging_power') | float(0) * 1000 %}
+            {% set grid_export = states('sensor.active_power') | float(0) %}
+            {% if charging_power > 0 %}
+              {% set surplus_power = [charging_power + grid_export, charging_power, 0] | sort %}
+              {{ surplus_power[1] | round(0) }}
+            {% else %}
+              0
+            {% endif %}
+          {% else %}
+            0
+          {% endif %}
+        unit_of_measurement: "W"
+        icon: mdi:solar-power
+
+      # Aktuálny výkon zo siete (W)
+      - name: "EV Výkon zo siete"
+        unique_id: ev_vykon_zo_siete
+        state: >
+          {% if is_state('input_boolean.ev_charging_active', 'on') %}
+            {% set charging_power = states('sensor.ev_charging_power') | float(0) * 1000 %}
+            {% set surplus = states('sensor.ev_vykon_z_prebytkov') | float(0) %}
+            {{ (charging_power - surplus) | round(0) }}
+          {% else %}
+            0
+          {% endif %}
+        unit_of_measurement: "W"
+        icon: mdi:transmission-tower
+
       # Stav nabíjačky (zjednodušený)
       - name: "EV Charger Status Simple"
         unique_id: ev_charger_status_simple
@@ -330,24 +432,20 @@ notify:
 # ================================
 
 shell_command:
-  # Zápis session do CSV súboru pomocou bash scriptu
-  ev_log_session: '/config/scripts/log_ev_session.sh "{{ session_id }}" "{{ start_time }}" "{{ end_time }}" "{{ user }}" "{{ energy_kwh }}" "{{ cost_eur }}" "{{ tariff }}" "{{ stop_reason }}" "{{ duration_min }}"'
+  # Zápis session do CSV súboru - ROZŠÍRENÉ o prebytky
+  ev_log_session: '/config/scripts/log_ev_session.sh "{{ session_id }}" "{{ start_time }}" "{{ end_time }}" "{{ user }}" "{{ energy_kwh }}" "{{ cost_eur }}" "{{ tariff }}" "{{ stop_reason }}" "{{ duration_min }}" "{{ surplus_energy }}" "{{ grid_energy }}" "{{ surplus_value }}"'
   
-  # Vytvorenie hlavičky CSV ak neexistuje
-  ev_create_csv_header: '[ ! -f /config/ev_charging_sessions.csv ] && echo "session_id,start_time,end_time,user,energy_kwh,cost_eur,tariff,stop_reason,duration_min" > /config/ev_charging_sessions.csv || true'
+  # Vytvorenie hlavičky CSV ak neexistuje - ROZŠÍRENÉ
+  ev_create_csv_header: '[ ! -f /config/ev_charging_sessions.csv ] && echo "session_id,start_time,end_time,user,energy_kwh,cost_eur,tariff,stop_reason,duration_min,surplus_energy_kwh,grid_energy_kwh,surplus_value_eur" > /config/ev_charging_sessions.csv || true'
   
   # Kopírovanie CSV do www pre download
   ev_copy_csv_to_www: 'mkdir -p /config/www && cp /config/ev_charging_sessions.csv /config/www/ev_charging_sessions.csv && chmod 644 /config/www/ev_charging_sessions.csv'
-  
-  # Refresh CSV pred downloadom
-  ev_refresh_csv: 'cp /config/ev_charging_sessions.csv /config/www/ev_charging_sessions.csv 2>/dev/null; chmod 644 /config/www/ev_charging_sessions.csv 2>/dev/null || true'
-  
-  # Reporty
-  ev_report_current_month: 'python3 /config/scripts/ev_charging_report.py'
-  ev_report_month: 'python3 /config/scripts/ev_charging_report.py {{ month }}'
-  ev_report_year: 'python3 /config/scripts/ev_charging_report.py --year {{ year }}'
-  ev_report_all: 'python3 /config/scripts/ev_charging_report.py --all'
-  ev_generate_xlsx: 'pip3 install openpyxl --break-system-packages -q 2>/dev/null; python3 /config/scripts/ev_generate_report.py xlsx 2>>/config/www/ev_xlsx_debug.log'
+
+  # Report generatory
+  ev_generate_monthly_report: 'python3 /config/scripts/ev_generate_report.py monthly'
+  ev_generate_yearly_report: 'python3 /config/scripts/ev_generate_report.py yearly'
+  ev_generate_xlsx_report: 'python3 /config/scripts/ev_generate_report.py xlsx'
+  ev_refresh_csv: 'python3 /config/scripts/ev_generate_report.py refresh'
 
 # ================================
 # SCRIPTS
@@ -359,6 +457,19 @@ script:
     alias: "EV - Štart session"
     mode: single
     sequence:
+      # AK predchádzajúca session je stále aktívna → ukonči ju najprv
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.ev_charging_active
+                state: "on"
+            sequence:
+              - service: script.ev_end_session
+                data:
+                  stop_reason: "new_session"
+              - delay:
+                  seconds: 2
+
       - service: input_boolean.turn_on
         target:
           entity_id: input_boolean.ev_charging_active
@@ -383,14 +494,14 @@ script:
         data:
           timestamp: "{{ now().timestamp() }}"
       
-      # Nastav energy meter štart
+      # Nastav energy meter štart - AKTUÁLNA hodnota metra
       - service: input_number.set_value
         target:
           entity_id: input_number.ev_session_energy_start
         data:
           value: "{{ states('sensor.hacharger_energy_active_import_register') | float(0) }}"
       
-      # Reset session hodnôt
+      # RESET VŠETKÝCH session hodnôt na 0
       - service: input_number.set_value
         target:
           entity_id: input_number.ev_session_energy_total
@@ -414,6 +525,24 @@ script:
           entity_id: input_number.ev_segment_cost
         data:
           value: 0
+
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.ev_session_surplus_energy
+        data:
+          value: 0
+      
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.ev_session_grid_energy
+        data:
+          value: 0
+
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.ev_session_surplus_value
+        data:
+          value: 0
       
       - service: input_select.select_option
         target:
@@ -421,16 +550,10 @@ script:
         data:
           option: "none"
       
-      # Vytvor CSV hlavičku ak neexistuje
-      - service: shell_command.ev_create_csv_header
-      
-      # Skopíruj CSV do www pre download
-      - service: shell_command.ev_copy_csv_to_www
-      
       - service: logbook.log
         data:
           name: "EV Charging"
-          message: "🟢 Session started - User: {{ states('input_select.ev_charging_user') }}, Tariff: {{ states('sensor.ev_aktualna_tarifa') }}"
+          message: "🟢 Session started - User: {{ states('input_select.ev_charging_user') }}, Tariff: {{ states('sensor.ev_aktualna_tarifa') }}, Price: {{ states('sensor.ev_aktualna_cena_kwh') }} EUR/kWh, Meter: {{ states('sensor.hacharger_energy_active_import_register') }}"
 
   # Ukončenie nabíjacej session
   ev_end_session:
@@ -441,12 +564,18 @@ script:
         description: "Dôvod ukončenia"
         example: "completed"
     sequence:
+      # Podmienka: session musí byť aktívna
       - condition: state
         entity_id: input_boolean.ev_charging_active
         state: "on"
       
       # Finálny update energie a nákladov
       - service: script.ev_update_session_stats
+      
+      # OKAMŽITE vypni flag - pred zápisom do CSV/XLSX
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.ev_charging_active
       
       # Nastav dôvod ukončenia
       - service: input_select.select_option
@@ -458,8 +587,12 @@ script:
       # Vypočítaj trvanie v minútach
       - variables:
           duration_min: >
-            {% set start = states('input_datetime.ev_session_start_time') | as_timestamp %}
-            {{ ((now().timestamp() - start) / 60) | round(1) }}
+            {% set start = states('input_datetime.ev_session_start_time') | as_timestamp(0) %}
+            {% if start > 0 %}
+              {{ ((now().timestamp() - start) / 60) | round(1) }}
+            {% else %}
+              0
+            {% endif %}
       
       # Zapíš do CSV
       - service: shell_command.ev_log_session
@@ -473,29 +606,33 @@ script:
           tariff: "{{ states('sensor.ev_aktualna_tarifa') }}"
           stop_reason: "{{ stop_reason | default('completed') }}"
           duration_min: "{{ duration_min }}"
+          surplus_energy: "{{ states('input_number.ev_session_surplus_energy') | round(3) }}"
+          grid_energy: "{{ states('input_number.ev_session_grid_energy') | round(3) }}"
+          surplus_value: "{{ states('input_number.ev_session_surplus_value') | round(3) }}"
       
-      # Skopíruj CSV do www pre download
-      - service: shell_command.ev_copy_csv_to_www
-      
-      # Generuj XLSX
+      # Generuj XLSX report
       - delay:
           seconds: 2
-      - service: shell_command.ev_generate_xlsx
+      - service: shell_command.ev_generate_xlsx_report
       
-      # Vypni flag
-      - service: input_boolean.turn_off
+      # Uloz trvanie poslednej session
+      - service: input_number.set_value
         target:
-          entity_id: input_boolean.ev_charging_active
+          entity_id: input_number.ev_last_session_duration_min
+        data:
+          value: "{{ duration_min }}"
       
       - service: logbook.log
         data:
           name: "EV Charging"
           message: >
             🔴 Session ended - Energy: {{ states('input_number.ev_session_energy_total') | round(2) }} kWh, 
-            Cost: {{ states('input_number.ev_session_cost_total') | round(2) }} EUR, 
+            Cost: {{ states('input_number.ev_session_cost_total') | round(2) }} EUR,
+            Surplus: {{ states('input_number.ev_session_surplus_energy') | round(2) }} kWh,
+            Duration: {{ duration_min }} min,
             Reason: {{ stop_reason | default('completed') }}
 
-  # Update štatistík session (volaný periodicky)
+  # Update štatistík session (volaný periodicky každú minútu)
   ev_update_session_stats:
     alias: "EV - Update štatistík"
     mode: single
@@ -512,10 +649,24 @@ script:
           # Energia od posledného updatu
           last_energy: "{{ states('input_number.ev_session_energy_total') | float(0) }}"
           energy_delta: "{{ (total_energy - last_energy) | round(3) }}"
-          # Náklady za delta energiu
-          cost_delta: "{{ (energy_delta * price_kwh) | round(5) }}"
+          # Výpočet podielu prebytkov na delta energii
+          charging_power_w: "{{ states('sensor.ev_charging_power') | float(0) * 1000 }}"
+          surplus_power_w: "{{ states('sensor.ev_vykon_z_prebytkov') | float(0) }}"
+          surplus_ratio: >
+            {% if charging_power_w | float(0) > 0 %}
+              {{ (surplus_power_w | float(0) / charging_power_w | float(0)) | round(4) }}
+            {% else %}
+              0
+            {% endif %}
+          # Rozdelenie delta energie na prebytky a sieť
+          delta_surplus: "{{ (energy_delta | float(0) * surplus_ratio | float(0)) | round(4) }}"
+          delta_grid: "{{ (energy_delta | float(0) - (energy_delta | float(0) * surplus_ratio | float(0))) | round(4) }}"
+          # Náklady len za energiu zo siete
+          cost_delta: "{{ (delta_grid | float(0) * price_kwh) | round(5) }}"
+          # Hodnota prebytkov (koľko by stáli keby boli zo siete)
+          surplus_value_delta: "{{ (delta_surplus | float(0) * price_kwh) | round(5) }}"
           # Celkové náklady
-          total_cost: "{{ (states('input_number.ev_session_cost_total') | float(0) + cost_delta) | round(3) }}"
+          total_cost: "{{ (states('input_number.ev_session_cost_total') | float(0) + cost_delta | float(0)) | round(3) }}"
       
       - service: input_number.set_value
         target:
@@ -528,6 +679,25 @@ script:
           entity_id: input_number.ev_session_cost_total
         data:
           value: "{{ total_cost }}"
+
+      # Aktualizuj prebytky
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.ev_session_surplus_energy
+        data:
+          value: "{{ (states('input_number.ev_session_surplus_energy') | float(0) + delta_surplus | float(0)) | round(3) }}"
+
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.ev_session_grid_energy
+        data:
+          value: "{{ (states('input_number.ev_session_grid_energy') | float(0) + delta_grid | float(0)) | round(3) }}"
+
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.ev_session_surplus_value
+        data:
+          value: "{{ (states('input_number.ev_session_surplus_value') | float(0) + surplus_value_delta | float(0)) | round(3) }}"
 
   # Spracovanie zmeny tarifu počas nabíjania
   ev_handle_tariff_change:
@@ -608,43 +778,53 @@ script:
           title: "EV Charging"
           message: "Používateľ '{{ new_user }}' bol pridaný"
 
-  # Refresh CSV pred downloadom
-  ev_refresh_csv_download:
+
+  # REPORT SKRIPTY
+  ev_generate_monthly_report:
+    alias: "EV - Mesacny report"
+    mode: single
+    sequence:
+      - service: shell_command.ev_generate_monthly_report
+      - delay:
+          seconds: 3
+      - service: persistent_notification.create
+        data:
+          title: "EV Report"
+          message: "Mesacny report vygenerovany. /local/ev_reports/"
+          notification_id: ev_monthly_report
+
+  ev_generate_yearly_report:
+    alias: "EV - Rocny report"
+    mode: single
+    sequence:
+      - service: shell_command.ev_generate_yearly_report
+      - delay:
+          seconds: 3
+      - service: persistent_notification.create
+        data:
+          title: "EV Report"
+          message: "Rocny report vygenerovany. /local/ev_reports/"
+          notification_id: ev_yearly_report
+
+  ev_generate_xlsx_report:
+    alias: "EV - XLSX report"
+    mode: single
+    sequence:
+      - service: shell_command.ev_generate_xlsx_report
+      - delay:
+          seconds: 5
+      - service: persistent_notification.create
+        data:
+          title: "EV Report"
+          message: "XLSX report vygenerovany."
+          notification_id: ev_xlsx_report
+
+  ev_refresh_csv:
     alias: "EV - Refresh CSV"
     mode: single
     sequence:
       - service: shell_command.ev_refresh_csv
-      - service: persistent_notification.create
-        data:
-          title: "EV Charging"
-          message: "CSV súbor bol obnovený"
-          notification_id: ev_csv_refresh
-
-  # Generovanie mesačného reportu
-  ev_generate_monthly_report:
-    alias: "EV - Mesačný report"
-    mode: single
-    sequence:
-      - service: shell_command.ev_report_current_month
-      - service: persistent_notification.create
-        data:
-          title: "EV Report"
-          message: "Mesačný report bol vygenerovaný. Pozri /local/ev_reports/"
-          notification_id: ev_report_generated
-
-  # Generovanie ročného reportu
-  ev_generate_yearly_report:
-    alias: "EV - Ročný report"
-    mode: single
-    sequence:
-      - service: shell_command.ev_report_year
-        data:
-          year: "{{ now().year }}"
-      - service: persistent_notification.create
-        data:
-          title: "EV Report"
-          message: "Ročný report {{ now().year }} bol vygenerovaný. Pozri /local/ev_reports/"
-          notification_id: ev_report_generated
+      - service: shell_command.ev_copy_csv_to_www
 
 # ================================
 # AUTOMATIONS
@@ -665,29 +845,58 @@ automation:
     action:
       - service: script.ev_start_session
   
-  # Detekcia ukončenia nabíjania
+  # Detekcia ukončenia nabíjania - ROBUSTNÁ verzia
   - id: ev_charging_stopped
     alias: "EV - Nabíjanie skončilo"
     trigger:
+      # Trigger 1: Stav sa zmenil z Charging na niečo iné
       - platform: state
         entity_id: sensor.hacharger_status_connector
         from: "Charging"
+        to:
+          - "Available"
+          - "Finishing"
+          - "SuspendedEV"
+          - "SuspendedEVSE"
+          - "Faulted"
+      # Trigger 2: Periodická kontrola - záchranná sieť
+      - platform: time_pattern
+        minutes: "/2"
     condition:
       - condition: state
         entity_id: input_boolean.ev_charging_active
         state: "on"
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: sensor.hacharger_status_connector
+            state: "Charging"
+      # Ignoruj krátkodobé pauzy (SuspendedEV) - počkaj 2 min
+      - condition: template
+        value_template: >
+          {% set status = states('sensor.hacharger_status_connector') %}
+          {% set last_changed = as_timestamp(states.sensor.hacharger_status_connector.last_changed, 0) %}
+          {% set elapsed = (now().timestamp() - last_changed) / 60 %}
+          {% if status in ['SuspendedEV', 'SuspendedEVSE'] %}
+            {{ elapsed > 5 }}
+          {% else %}
+            {{ elapsed > 1 }}
+          {% endif %}
     action:
       - service: script.ev_end_session
         data:
           stop_reason: >
-            {% if trigger.to_state.state == 'Available' %}
+            {% set status = states('sensor.hacharger_status_connector') %}
+            {% if status == 'Available' %}
               ev_disconnected
-            {% elif trigger.to_state.state == 'Finishing' %}
+            {% elif status == 'Finishing' %}
               completed
-            {% elif trigger.to_state.state == 'Faulted' %}
+            {% elif status == 'Faulted' %}
               error
-            {% else %}
+            {% elif status in ['SuspendedEV', 'SuspendedEVSE'] %}
               manual
+            {% else %}
+              completed
             {% endif %}
   
   # Periodický update štatistík (každú minútu počas nabíjania)
@@ -725,7 +934,7 @@ automation:
           message: "⚡ Tariff changed to {{ states('sensor.ev_aktualna_tarifa') }} ({{ states('sensor.ev_aktualna_cena_kwh') }} EUR/kWh)"
   
   # ========================================
-  # SCHEDULED CHARGING - Naplánované nabíjanie
+  # SCHEDULED CHARGING
   # ========================================
   
   # Spustenie nabíjania v naplánovanom čase
@@ -738,19 +947,16 @@ automation:
       - condition: state
         entity_id: input_boolean.ev_scheduled_enabled
         state: "on"
-      # Auto je pripojené (kábel)
       - condition: not
         conditions:
           - condition: state
             entity_id: sensor.hacharger_status_connector
             state: "Available"
-      # Ešte nenabíja
       - condition: not
         conditions:
           - condition: state
             entity_id: sensor.hacharger_status_connector
             state: "Charging"
-      # Kontrola dňa v týždni
       - condition: template
         value_template: >
           {% set days = states('input_select.ev_scheduled_days') %}
@@ -767,7 +973,6 @@ automation:
             true
           {% endif %}
     action:
-      # Nastav max prúd ak je povolené
       - choose:
           - conditions:
               - condition: state
@@ -780,12 +985,10 @@ automation:
                 data:
                   value: "{{ states('input_number.ev_scheduled_max_current') | int }}"
       
-      # Zapni nabíjanie
       - service: switch.turn_on
         target:
           entity_id: switch.hacharger_charge_control
       
-      # Ak je "Iba raz", vypni plánovanie
       - choose:
           - conditions:
               - condition: state
@@ -887,7 +1090,6 @@ automation:
       - condition: state
         entity_id: input_boolean.ev_paused_by_tariff
         state: "on"
-      # Auto je stále pripojené
       - condition: not
         conditions:
           - condition: state
@@ -909,60 +1111,143 @@ automation:
           message: "▶️ Nabíjanie obnovené - lacná tarifa {{ states('sensor.ev_aktualna_tarifa') }}"
 
   # ========================================
-  # SOC LIMIT - Zastavenie pri dosiahnutí limitu
+  # SOC LIMIT - Zastavenie nabíjania pri dosiahnutí SOC
   # ========================================
-  
-  # Zastaví nabíjanie keď SOC dosiahne limit
   - id: ev_soc_limit_reached
-    alias: "EV - SOC limit dosiahnutý"
+    alias: "EV - SOC Limit dosiahnutý"
     trigger:
       - platform: template
         value_template: >
-          {{ states('sensor.battery_level') | float(0) >= states('input_number.ev_soc_limit') | float(100) }}
+          {{ is_state('input_boolean.ev_soc_limit_enabled', 'on') and
+             is_state('input_boolean.ev_charging_active', 'on') and
+             states('sensor.mysan_battery_level') | float(0) >= states('input_number.ev_soc_limit') | float(80) }}
     condition:
-      # SOC limit je zapnutý
-      - condition: state
-        entity_id: input_boolean.ev_soc_limit_enabled
-        state: "on"
-      # Wallbox nabíja
       - condition: state
         entity_id: sensor.hacharger_status_connector
         state: "Charging"
     action:
-      # Vypni nabíjanie
       - service: switch.turn_off
         target:
           entity_id: switch.hacharger_charge_control
-      
-      # Loguj
       - service: logbook.log
         data:
           name: "EV Charging"
-          message: "🔋 SOC limit {{ states('input_number.ev_soc_limit') }}% dosiahnutý - nabíjanie zastavené"
-      
-      # Notifikácia
-      - service: persistent_notification.create
-        data:
-          title: "EV Nabíjanie dokončené"
-          message: >
-            ✅ Batéria nabitá na {{ states('sensor.battery_level') }}%
-            (limit: {{ states('input_number.ev_soc_limit') }}%)
-          notification_id: ev_soc_limit_reached
-  
-  # Notifikácia pri dosiahnutí 100%
-  - id: ev_fully_charged
-    alias: "EV - Plne nabité"
-    trigger:
-      - platform: numeric_state
-        entity_id: sensor.battery_level
-        above: 99
-    condition:
-      - condition: state
-        entity_id: sensor.hacharger_status_connector
-        state: "Charging"
-    action:
+          message: "🔋 SOC Limit dosiahnutý ({{ states('sensor.mysan_battery_level') }}% >= {{ states('input_number.ev_soc_limit') }}%) - nabíjanie zastavené"
       - service: persistent_notification.create
         data:
           title: "EV Nabíjanie"
-          message: "🔋 Batéria je plne nabitá ({{ states('sensor.battery_level') }}%)"
-          notification_id: ev_fully_charged
+          message: "🔋 Nabíjanie zastavené - SOC dosiahol {{ states('sensor.mysan_battery_level') }}% (limit: {{ states('input_number.ev_soc_limit') }}%)"
+          notification_id: ev_soc_limit
+
+  # ========================================
+  # OBNOVA STAVU PO REŠTARTE HA (Fix #1)
+  # ========================================
+  - id: ev_restore_after_restart
+    alias: "EV - Obnova stavu po reštarte HA"
+    trigger:
+      - platform: homeassistant
+        event: start
+    condition: []
+    action:
+      - delay:
+          seconds: 30
+      - choose:
+          # Ak nabíjačka práve nabíja a session nie je aktívna → obnov session
+          - conditions:
+              - condition: state
+                entity_id: sensor.hacharger_status_connector
+                state: "Charging"
+              - condition: state
+                entity_id: input_boolean.ev_charging_active
+                state: "off"
+            sequence:
+              - service: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.ev_charging_active
+              - service: logbook.log
+                data:
+                  name: "EV Charging"
+                  message: "🔄 Session obnovená po reštarte HA - nabíjačka stále nabíja"
+              - service: persistent_notification.create
+                data:
+                  title: "EV Nabíjanie"
+                  message: "🔄 EV session bola automaticky obnovená po reštarte HA. Nabíjačka stále nabíja."
+                  notification_id: ev_restart_recovery
+          # Ak nabíjačka nenabíja ale session je aktívna → ukonči session
+          - conditions:
+              - condition: not
+                conditions:
+                  - condition: state
+                    entity_id: sensor.hacharger_status_connector
+                    state: "Charging"
+              - condition: state
+                entity_id: input_boolean.ev_charging_active
+                state: "on"
+            sequence:
+              - service: script.ev_end_session
+                data:
+                  stop_reason: "ha_restart"
+              - service: logbook.log
+                data:
+                  name: "EV Charging"
+                  message: "🔄 Session ukončená po reštarte HA - nabíjačka už nenabíja"
+
+  # ========================================
+  # KONTROLA TARIFY PRI ZAPOJENÍ EV (Fix #2)
+  # ========================================
+  - id: ev_plugin_tariff_check
+    alias: "EV - Kontrola tarify pri zapojení"
+    description: "Pri zapojení EV skontroluje tarifu. Ak je zakázaná (T4 pri smart charging), nespustí nabíjanie a naplánuje štart."
+    trigger:
+      - platform: state
+        entity_id: sensor.hacharger_status_connector
+        to: "Preparing"
+    condition:
+      - condition: state
+        entity_id: input_boolean.ev_smart_charging_enabled
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.t4_aktivna
+        state: "on"
+    action:
+      # Vypni nabíjanie - práve prebieha zakázaná tarifa
+      - service: switch.turn_off
+        target:
+          entity_id: switch.hacharger_charge_control
+      # Zapni plánovaný štart na najbližšiu povolenú tarifu
+      - service: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.ev_scheduled_enabled
+      # Nastav čas štartu na koniec T4
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.ev_scheduled_start_time
+        data:
+          time: >
+            {% set t4_evening_end = states('input_datetime.tariff_t4_evening_end')[:5] %}
+            {% set t4_morning_end = states('input_datetime.tariff_t4_morning_end')[:5] %}
+            {% set now_time = now().strftime('%H:%M') %}
+            {% if now_time >= '06:00' and now_time < '09:00' %}
+              {{ t4_morning_end }}
+            {% else %}
+              {{ t4_evening_end }}
+            {% endif %}
+      - service: input_select.select_option
+        target:
+          entity_id: input_select.ev_scheduled_days
+        data:
+          option: "Iba raz"
+      - service: logbook.log
+        data:
+          name: "EV Charging"
+          message: >
+            ⏳ EV zapojené počas zakázanej tarify T4.
+            Nabíjanie ODLOŽENÉ - naplánovaný štart po skončení T4.
+      - service: persistent_notification.create
+        data:
+          title: "EV Nabíjanie - Odložené"
+          message: >
+            ⏳ EV bolo zapojené počas drahej tarify T4.
+            Nabíjanie je odložené a automaticky sa spustí po skončení T4
+            (o {{ states('input_datetime.ev_scheduled_start_time') }}).
+          notification_id: ev_tariff_delayed
