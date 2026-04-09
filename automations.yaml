@@ -754,7 +754,8 @@
   id: ariston_flexible_on
   mode: single
 - alias: Ariston - Flexibilné vypnutie
-  description: Vypína Ariston - pri prebytkoch po min.čase, pri tarife až keď príde zakázaná tarifa
+  description: Vypína Ariston - pri prebytkoch po min.čase, pri tarife až keď príde
+    zakázaná tarifa
   trigger:
   - platform: state
     entity_id:
@@ -789,32 +790,34 @@
       state: none
   - condition: or
     conditions:
-    # SURPLUS: vypni po min_time keď prebytky klesnú
     - condition: and
       conditions:
       - condition: template
-        value_template: "{{ states('input_select.bojler_ariston_start_reason') in ['surplus', 'drazice_ready'] }}"
+        value_template: '{{ states(''input_select.bojler_ariston_start_reason'') in
+          [''surplus'', ''drazice_ready''] }}'
       - condition: template
         value_template: '{{ states(''sensor.active_power'') | float(0) < states(''input_number.bojler_ariston_surplus_threshold_off'')
           | float(500) }}'
       - condition: template
-        value_template: >
-          {% set start = states('input_datetime.bojler_ariston_start_time') | as_timestamp %}
-          {% set mins = (now().timestamp() - start) / 60 %}
-          {{ mins >= states('input_number.bojler_ariston_min_time') | float(15) }}
-    # TARIFA: vypni LEN keď príde zakázaná tarifa (žiadna z povolených nie je aktívna)
+        value_template: '{% set start = states(''input_datetime.bojler_ariston_start_time'')
+          | as_timestamp %} {% set mins = (now().timestamp() - start) / 60 %} {{ mins
+          >= states(''input_number.bojler_ariston_min_time'') | float(15) }}
+
+          '
     - condition: and
       conditions:
       - condition: template
-        value_template: "{{ states('input_select.bojler_ariston_start_reason') in ['t1', 't2', 't3', 't4'] }}"
+        value_template: '{{ states(''input_select.bojler_ariston_start_reason'') in
+          [''t1'', ''t2'', ''t3'', ''t4''] }}'
       - condition: template
-        value_template: >
-          {% set t1_ok = is_state('binary_sensor.t1_aktivna', 'on') and is_state('input_boolean.bojler_ariston_enable_t1', 'on') %}
-          {% set t2_ok = is_state('binary_sensor.t2_aktivna', 'on') and is_state('input_boolean.bojler_ariston_enable_t2', 'on') %}
-          {% set t3_ok = is_state('binary_sensor.t3_aktivna', 'on') and is_state('input_boolean.bojler_ariston_enable_t3', 'on') %}
-          {% set surplus_ok = is_state('input_boolean.bojler_ariston_enable_surplus', 'on') and
-                              states('sensor.active_power') | float(0) > states('input_number.bojler_ariston_surplus_threshold_on') | float(2000) %}
-          {{ not (t1_ok or t2_ok or t3_ok or surplus_ok) }}
+        value_template: "{% set t1_ok = is_state('binary_sensor.t1_aktivna', 'on')
+          and is_state('input_boolean.bojler_ariston_enable_t1', 'on') %} {% set t2_ok
+          = is_state('binary_sensor.t2_aktivna', 'on') and is_state('input_boolean.bojler_ariston_enable_t2',
+          'on') %} {% set t3_ok = is_state('binary_sensor.t3_aktivna', 'on') and is_state('input_boolean.bojler_ariston_enable_t3',
+          'on') %} {% set surplus_ok = is_state('input_boolean.bojler_ariston_enable_surplus',
+          'on') and\n                    states('sensor.active_power') | float(0)
+          > states('input_number.bojler_ariston_surplus_threshold_on') | float(2000)
+          %}\n{{ not (t1_ok or t2_ok or t3_ok or surplus_ok) }}\n"
   action:
   - service: switch.turn_off
     target:
@@ -856,7 +859,8 @@
   id: ariston_manual_reset
   mode: single
 - alias: Ariston - Detekcia manuálneho zapnutia
-  description: Nastaví špeciálny stav pri manuálnom zapnutí Ariston bojlera (ignoruje reštart HA)
+  description: Nastaví špeciálny stav pri manuálnom zapnutí Ariston bojlera (ignoruje
+    reštart HA)
   trigger:
   - platform: state
     entity_id: switch.pw_bojler_immax
@@ -1189,7 +1193,7 @@
       stupen: '{{ trigger.to_state.state | int }}'
     action: script.vetranie_nastav_stupen
 - id: vetranie_cas_rano
-  alias: Vetranie - Ráno 6:00 [0]
+  alias: Vetranie - Ráno 6:00 [2]
   description: ''
   triggers:
   - at: 06:00:00
@@ -1200,10 +1204,10 @@
     state: 'off'
   actions:
   - data:
-      stupen: 0
+      stupen: 2
     action: script.vetranie_nastav_stupen
 - id: vetranie_cas_den
-  alias: Vetranie - Deň 9:00 [4]
+  alias: Vetranie - Deň 9:00 [2]
   description: ''
   triggers:
   - at: 09:00:00
@@ -1214,7 +1218,7 @@
     state: 'off'
   actions:
   - data:
-      stupen: 1
+      stupen: 2
     action: script.vetranie_nastav_stupen
 - id: vetranie_cas_noc
   alias: Vetranie - Noc 20:30 [0]
@@ -1231,7 +1235,7 @@
       stupen: 0
     action: script.vetranie_nastav_stupen
 - id: '1773389009913'
-  alias: Vetranie - PolNoc - o 00:30 [2]
+  alias: Vetranie - PolNoc - o 00:30 [5]
   description: ''
   triggers:
   - at: 00:30:00
@@ -1242,7 +1246,7 @@
     state: 'off'
   actions:
   - data:
-      stupen: 2
+      stupen: 5
     action: script.vetranie_nastav_stupen
   mode: single
 - id: cost_tracking_klima_update
@@ -1415,10 +1419,6 @@
     data:
       value: 0
   mode: single
-
-# ========================================
-# VETRANIE - CO2 AUTOMATIZÁCIA (Fix #5)
-# ========================================
 - id: vetranie_co2_high
   alias: Vetranie - CO2 vysoké - zvýšiť
   description: Pri vysokom CO2 zvýši stupeň vetrania
@@ -1436,8 +1436,10 @@
     entity_id: input_boolean.vetranie_forced_off
     state: 'off'
   - condition: template
-    value_template: >
-      {{ states('input_number.vetranie_stupen') | int < states('input_number.vetranie_co2_stupen') | int }}
+    value_template: '{{ states(''input_number.vetranie_stupen'') | int < states(''input_number.vetranie_co2_stupen'')
+      | int }}
+
+      '
   action:
   - service: script.vetranie_nastav_stupen
     data:
@@ -1445,9 +1447,10 @@
   - service: logbook.log
     data:
       name: Vetranie CO2
-      message: "⬆️ CO2 vysoké ({{ states('sensor.wifi_smart_switch_carbon_dioxide') }} ppm) - stupeň zvýšený na {{ states('input_number.vetranie_co2_stupen') }}"
+      message: ⬆️ CO2 vysoké ({{ states('sensor.wifi_smart_switch_carbon_dioxide')
+        }} ppm) - stupeň zvýšený na {{ states('input_number.vetranie_co2_stupen')
+        }}
   mode: single
-
 - id: vetranie_co2_low
   alias: Vetranie - CO2 nízke - znížiť
   description: Pri nízkom CO2 vráti stupeň vetrania na predchádzajúci
@@ -1465,8 +1468,9 @@
     entity_id: input_boolean.vetranie_forced_off
     state: 'off'
   - condition: template
-    value_template: >
-      {{ states('input_number.vetranie_stupen') | int > 1 }}
+    value_template: '{{ states(''input_number.vetranie_stupen'') | int > 1 }}
+
+      '
   action:
   - service: script.vetranie_nastav_stupen
     data:
@@ -1474,9 +1478,9 @@
   - service: logbook.log
     data:
       name: Vetranie CO2
-      message: "⬇️ CO2 nízke ({{ states('sensor.wifi_smart_switch_carbon_dioxide') }} ppm) - stupeň znížený na 1"
+      message: ⬇️ CO2 nízke ({{ states('sensor.wifi_smart_switch_carbon_dioxide')
+        }} ppm) - stupeň znížený na 1
   mode: single
-
 - id: vetranie_forced_off_activated
   alias: Vetranie - Forced OFF aktivované
   description: Pri zapnutí forced_off uloží aktuálny stupeň a vypne vetranie na 0
@@ -1496,21 +1500,20 @@
   - service: logbook.log
     data:
       name: Vetranie
-      message: "🛑 Vynútené vypnutie vetrania (bol stupeň {{ states('input_number.vetranie_stupen_pred_forced_off') }})"
+      message: "\U0001F6D1 Vynútené vypnutie vetrania (bol stupeň {{ states('input_number.vetranie_stupen_pred_forced_off')
+        }})"
   - service: persistent_notification.create
     data:
-      title: "💨 Vetranie - Vynútené vypnutie"
-      message: >
-        Vetranie je vynútene vypnuté (bol stupeň {{ states('input_number.vetranie_stupen_pred_forced_off') }}).
-        {% if is_state('input_boolean.vetranie_auto_restart_enabled', 'on') %}
-        Automatický reštart o {{ states('input_datetime.vetranie_auto_restart_time') }}
-        na stupeň {{ states('input_number.vetranie_auto_restart_stupen') | int }}.
-        {% else %}
-        Automatický reštart nie je nastavený.
-        {% endif %}
+      title: "\U0001F4A8 Vetranie - Vynútené vypnutie"
+      message: 'Vetranie je vynútene vypnuté (bol stupeň {{ states(''input_number.vetranie_stupen_pred_forced_off'')
+        }}). {% if is_state(''input_boolean.vetranie_auto_restart_enabled'', ''on'')
+        %} Automatický reštart o {{ states(''input_datetime.vetranie_auto_restart_time'')
+        }} na stupeň {{ states(''input_number.vetranie_auto_restart_stupen'') | int
+        }}. {% else %} Automatický reštart nie je nastavený. {% endif %}
+
+        '
       notification_id: vetranie_forced_off
   mode: single
-
 - id: vetranie_forced_off_deactivated
   alias: Vetranie - Forced OFF deaktivované
   description: Pri vypnutí forced_off obnoví normálnu prevádzku
@@ -1525,9 +1528,8 @@
   - service: logbook.log
     data:
       name: Vetranie
-      message: "✅ Vynútené vypnutie zrušené - automatizácia obnovená"
+      message: ✅ Vynútené vypnutie zrušené - automatizácia obnovená
   mode: single
-
 - id: vetranie_auto_restart
   alias: Vetranie - Automatický reštart po forced off
   description: V nastavenom čase vypne forced_off a nastaví požadovaný stupeň
@@ -1553,15 +1555,12 @@
   - service: logbook.log
     data:
       name: Vetranie
-      message: "🔄 Automatický reštart vetrania - stupeň {{ states('input_number.vetranie_auto_restart_stupen') }}"
+      message: "\U0001F504 Automatický reštart vetrania - stupeň {{ states('input_number.vetranie_auto_restart_stupen')
+        }}"
   - service: persistent_notification.dismiss
     data:
       notification_id: vetranie_forced_off
   mode: single
-
-# ========================================
-# KLÍMA - HEALTH SWITCH PRI ZAPNUTÍ (Fix #6)
-# ========================================
 - id: klima_health_switch_on
   alias: Klíma - Zapnúť Health pri zapnutí klímy
   description: Pri zapnutí klimatizácie automaticky zapne aj Health (Healthy) prepínač
@@ -1578,5 +1577,20 @@
   - service: logbook.log
     data:
       name: Klíma
-      message: "🏥 Health prepínač automaticky zapnutý spolu s klimatizáciou"
+      message: "\U0001F3E5 Health prepínač automaticky zapnutý spolu s klimatizáciou"
+  mode: single
+- id: '1775680876612'
+  alias: Vetranie - 22:00 [4]
+  description: ''
+  triggers:
+  - at: '22:00:00'
+    trigger: time
+  conditions:
+  - condition: state
+    entity_id: input_boolean.vetranie_forced_off
+    state: 'off'
+  actions:
+  - data:
+      stupen: 4
+    action: script.vetranie_nastav_stupen
   mode: single

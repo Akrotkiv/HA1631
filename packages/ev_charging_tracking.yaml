@@ -1084,3 +1084,67 @@ automation:
           title: "EV Nabíjanie"
           message: "🔋 Batéria je plne nabitá ({{ states('sensor.battery_level') }}%)"
           notification_id: ev_fully_charged
+
+  # ========================================
+  # KONTROLA TARIFY PRI ŠTARTE NABÍJANIA
+  # ========================================
+  # Keď nabíjačka začne nabíjať počas zakázanej tarify (T4):
+  # → vypne nabíjanie
+  # → naplánuje štart na začiatok najbližšej povolenej tarify
+  - id: ev_plugin_tariff_check
+    alias: "EV - Kontrola tarify pri zapojení"
+    trigger:
+      - platform: state
+        entity_id: sensor.hacharger_status_connector
+        to: "Charging"
+    condition:
+      - condition: state
+        entity_id: input_boolean.ev_smart_charging_enabled
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.t4_aktivna
+        state: "on"
+    action:
+      # Vypni nabíjanie
+      - service: switch.turn_off
+        target:
+          entity_id: switch.hacharger_charge_control
+      
+      # Vypočítaj čas najbližšej povolenej tarify
+      # T4 ráno (06-09) → ďalšia je T3 o 09:00
+      # T4 večer (19-22) → ďalšia je T1 o 22:00
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.ev_scheduled_start_time
+        data:
+          time: >
+            {% set now_h = now().hour %}
+            {% if now_h >= 6 and now_h < 9 %}
+              {{ states('input_datetime.tariff_t3_start')[:5] }}
+            {% else %}
+              {{ states('input_datetime.tariff_t1_start')[:5] }}
+            {% endif %}
+      
+      # Zapni plánované nabíjanie (jednorazovo)
+      - service: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.ev_scheduled_enabled
+      - service: input_select.select_option
+        target:
+          entity_id: input_select.ev_scheduled_days
+        data:
+          option: "Iba raz"
+      
+      - service: persistent_notification.create
+        data:
+          title: "EV Nabíjanie - Odložené"
+          message: >
+            ⏳ Nabíjanie odložené kvôli drahej tarife T4.
+            Naplánovaný štart: {{ states('input_datetime.ev_scheduled_start_time') }}
+          notification_id: ev_tariff_delayed
+      - service: logbook.log
+        data:
+          name: "EV Charging"
+          message: >
+            ⏳ Nabíjanie odložené - T4 aktívna.
+            Naplánovaný štart: {{ states('input_datetime.ev_scheduled_start_time') }}
