@@ -44,6 +44,264 @@
         Začala sa VT - odporúča sa obmedzenie spotreby\n{% endif %}\n"
       notification_id: tariff_change
   id: c6de83c5bbe64b99be706e78fa050e68
+- alias: Bojler - Flexibilné zapnutie
+  description: 'Zapína bojler podľa nastavených prepínačov: prebytky a/alebo NT'
+  trigger:
+  - platform: template
+    value_template: "{{ is_state('input_boolean.bojler_enable_surplus', 'on') and\n
+      \  states('sensor.active_power') | float(0) > states('input_number.bojler_surplus_threshold_on')
+      | float(3500) }}\n"
+    id: surplus_enabled
+  - platform: state
+    entity_id: binary_sensor.nt_aktivna
+    to: 'on'
+    id: nt_start
+  condition:
+  - condition: state
+    entity_id: switch.pw_bojler_immax
+    state: 'off'
+  - condition: state
+    entity_id: input_boolean.tariff_system_enabled
+    state: 'on'
+  - condition: or
+    conditions:
+    - condition: and
+      conditions:
+      - condition: state
+        entity_id: input_boolean.bojler_enable_surplus
+        state: 'on'
+      - condition: template
+        value_template: '{{ states(''sensor.active_power'') | float(0) > states(''input_number.bojler_surplus_threshold_on'')
+          | float(3500) }}
+
+          '
+    - condition: and
+      conditions:
+      - condition: state
+        entity_id: input_boolean.bojler_enable_nt
+        state: 'on'
+      - condition: state
+        entity_id: binary_sensor.nt_aktivna
+        state: 'on'
+  action:
+  - service: switch.turn_on
+    target:
+      entity_id: switch.pw_bojler_immax
+  - service: input_datetime.set_datetime
+    target:
+      entity_id: input_datetime.bojler_start_time
+    data:
+      timestamp: '{{ now().timestamp() }}'
+  - service: input_select.select_option
+    target:
+      entity_id: input_select.bojler_start_reason
+    data:
+      option: "{% set surplus_active = is_state('input_boolean.bojler_enable_surplus',
+        'on') and \n                        states('sensor.active_power') | float(0)
+        > states('input_number.bojler_surplus_threshold_on') | float(3500) %}\n{%
+        set nt_active = is_state('input_boolean.bojler_enable_nt', 'on') and \n                   is_state('binary_sensor.nt_aktivna',
+        'on') %}\n\n{% if surplus_active and nt_active %}\n  both\n{% elif surplus_active
+        %}\n  surplus\n{% else %}\n  tariff\n{% endif %}\n"
+  - service: logbook.log
+    data:
+      name: Bojler Flexibilná Automatizácia
+      message: "\U0001F7E2 Bojler zapnutý:  {% set surplus_on = is_state('input_boolean.bojler_enable_surplus',
+        'on') %} {% set nt_on = is_state('input_boolean.bojler_enable_nt', 'on') %}
+        {% set power = states('sensor.active_power') | float(0) %} {% set threshold
+        = states('input_number.bojler_surplus_threshold_on') | float(3500) %}\n{%
+        if surplus_on and power > threshold and nt_on and is_state('binary_sensor.nt_aktivna',
+        'on') %}\n  Prebytky ({{ power }}W) + NT aktívna\n{% elif surplus_on and power
+        > threshold %}\n  Prebytky ({{ power }}W)\n{% elif nt_on and is_state('binary_sensor.nt_aktivna',
+        'on') %}\n  NT aktívna\n{% else %}\n  Neznámy dôvod\n{% endif %}\n"
+  id: 2c4263ba38df47c18b655f9a945f6776
+- alias: Bojler - Flexibilné vypnutie
+  description: Vypína bojler podľa dôvodu zapnutia a nastavených prahov
+  trigger:
+  - platform: state
+    entity_id: binary_sensor.nt_aktivna
+    to: 'off'
+    id: nt_end
+  - platform: template
+    value_template: '{{ states(''sensor.active_power'') | float(0) < states(''input_number.bojler_surplus_threshold_off'')
+      | float(-200) }}
+
+      '
+    for:
+      minutes: 2
+    id: surplus_low
+  - platform: time_pattern
+    minutes: /5
+    id: periodic_check
+  condition:
+  - condition: state
+    entity_id: switch.pw_bojler_immax
+    state: 'on'
+  - condition: or
+    conditions:
+    - condition: and
+      conditions:
+      - condition: state
+        entity_id: input_select.bojler_start_reason
+        state: surplus
+      - condition: template
+        value_template: '{{ states(''sensor.active_power'') | float(0) < states(''input_number.bojler_surplus_threshold_off'')
+          | float(-200) }}
+
+          '
+      - condition: template
+        value_template: '{% set start_time = states(''input_datetime.bojler_start_time'')
+          | as_timestamp %} {% set current_time = now().timestamp() %} {% set running_minutes
+          = (current_time - start_time) / 60 %} {% set is_nt = is_state(''binary_sensor.nt_aktivna'',
+          ''on'') %} {% set min_time_nt = states(''input_number.bojler_min_time_nt'')
+          | float(30) %} {% set min_time_vt = states(''input_number.bojler_min_time_vt'')
+          | float(15) %} {% set min_time = min_time_nt if is_nt else min_time_vt %}
+          {{ running_minutes >= min_time }}
+
+          '
+    - condition: and
+      conditions:
+      - condition: state
+        entity_id: input_select.bojler_start_reason
+        state: tariff
+      - condition: template
+        value_template: '{{ trigger.id == ''nt_end'' }}'
+      - condition: template
+        value_template: '{% set start_time = states(''input_datetime.bojler_start_time'')
+          | as_timestamp %} {% set current_time = now().timestamp() %} {% set running_minutes
+          = (current_time - start_time) / 60 %} {% set min_time = states(''input_number.bojler_min_time_nt'')
+          | float(30) %} {{ running_minutes >= min_time }}
+
+          '
+    - condition: and
+      conditions:
+      - condition: state
+        entity_id: input_select.bojler_start_reason
+        state: both
+      - condition: or
+        conditions:
+        - condition: and
+          conditions:
+          - condition: template
+            value_template: '{{ trigger.id == ''nt_end'' }}'
+          - condition: template
+            value_template: '{{ states(''sensor.active_power'') | float(0) < states(''input_number.bojler_surplus_threshold_on'')
+              | float(3500) }}
+
+              '
+          - condition: template
+            value_template: '{% set start_time = states(''input_datetime.bojler_start_time'')
+              | as_timestamp %} {% set current_time = now().timestamp() %} {% set
+              running_minutes = (current_time - start_time) / 60 %} {% set min_time
+              = states(''input_number.bojler_min_time_nt'') | float(30) %} {{ running_minutes
+              >= min_time }}
+
+              '
+        - condition: and
+          conditions:
+          - condition: template
+            value_template: '{{ trigger.id == ''surplus_low'' }}'
+          - condition: state
+            entity_id: binary_sensor.nt_aktivna
+            state: 'off'
+          - condition: template
+            value_template: '{% set start_time = states(''input_datetime.bojler_start_time'')
+              | as_timestamp %} {% set current_time = now().timestamp() %} {% set
+              running_minutes = (current_time - start_time) / 60 %} {% set min_time
+              = states(''input_number.bojler_min_time_vt'') | float(15) %} {{ running_minutes
+              >= min_time }}
+
+              '
+  action:
+  - service: switch.turn_off
+    target:
+      entity_id: switch.pw_bojler_immax
+  - service: input_select.select_option
+    target:
+      entity_id: input_select.bojler_start_reason
+    data:
+      option: none
+  - service: logbook.log
+    data:
+      name: Bojler Flexibilná Automatizácia
+      message: "\U0001F534 Bojler vypnutý:  {% set start_time = states('input_datetime.bojler_start_time')
+        | as_timestamp %} {% set current_time = now().timestamp() %} {% set running_minutes
+        = ((current_time - start_time) / 60) | round(1) %} {% set reason = states('input_select.bojler_start_reason')
+        %} {% set power = states('sensor.active_power') | float(0) %}\n{% if reason
+        == 'surplus' %}\n  Prebytky poklesli ({{ power }}W) - bežal {{ running_minutes
+        }} min\n{% elif reason == 'tariff' %}\n  Koniec NT - bežal {{ running_minutes
+        }} min\n{% elif reason == 'both' %}\n  Kombinované podmienky ({{ power }}W)
+        - bežal {{ running_minutes }} min\n{% else %}\n  Kontrola stavu - bežal {{
+        running_minutes }} min\n{% endif %}\n"
+  id: c9b14cbf68e24c69bc33dd468b77f660
+- alias: Bojler - Prepnutie dôvodu za behu
+  description: Aktualizuje dôvod behu podľa aktuálnych podmienok
+  trigger:
+  - platform: template
+    value_template: '{{ states(''sensor.active_power'') | float(0) > states(''input_number.bojler_surplus_threshold_on'')
+      | float(3500) }}
+
+      '
+    for:
+      minutes: 3
+    id: surplus_appeared
+  - platform: state
+    entity_id: binary_sensor.nt_aktivna
+    to: 'on'
+    id: nt_appeared
+  condition:
+  - condition: state
+    entity_id: switch.pw_bojler_immax
+    state: 'on'
+  - condition: template
+    value_template: "{% set current_reason = states('input_select.bojler_start_reason')
+      %} {% set surplus_active = is_state('input_boolean.bojler_enable_surplus', 'on')
+      and \n                        states('sensor.active_power') | float(0) > states('input_number.bojler_surplus_threshold_on')
+      | float(3500) %}\n{% set nt_active = is_state('input_boolean.bojler_enable_nt',
+      'on') and \n                   is_state('binary_sensor.nt_aktivna', 'on') %}\n\n{%
+      if surplus_active and nt_active %}\n  {{ current_reason != 'both' }}\n{% elif
+      surplus_active %}\n  {{ current_reason != 'surplus' }}\n{% elif nt_active %}\n
+      \ {{ current_reason != 'tariff' }}\n{% else %}\n  false\n{% endif %}\n"
+  action:
+  - service: input_select.select_option
+    target:
+      entity_id: input_select.bojler_start_reason
+    data:
+      option: "{% set surplus_active = is_state('input_boolean.bojler_enable_surplus',
+        'on') and \n                        states('sensor.active_power') | float(0)
+        > states('input_number.bojler_surplus_threshold_on') | float(3500) %}\n{%
+        set nt_active = is_state('input_boolean.bojler_enable_nt', 'on') and \n                   is_state('binary_sensor.nt_aktivna',
+        'on') %}\n\n{% if surplus_active and nt_active %}\n  both\n{% elif surplus_active
+        %}\n  surplus\n{% else %}\n  tariff\n{% endif %}\n"
+  - service: logbook.log
+    data:
+      name: Bojler Flexibilná Automatizácia
+      message: "\U0001F504 Dôvod behu aktualizovaný: {{ states('input_select.bojler_start_reason')
+        }} ({{ states('sensor.active_power') }}W, NT: {{ 'áno' if is_state('binary_sensor.nt_aktivna',
+        'on') else 'nie' }})\n"
+  id: bcb5878d9e2344658ac04a574223f487
+- alias: Bojler - Reset pri manuálnom vypnutí
+  description: Resetuje helpers pri manuálnom vypnutí bojlera
+  trigger:
+  - platform: state
+    entity_id: switch.pw_bojler_immax
+    to: 'off'
+  condition:
+  - condition: template
+    value_template: '{{ not is_state(''input_select.bojler_start_reason'', ''none'')
+      }}
+
+      '
+  action:
+  - service: input_select.select_option
+    target:
+      entity_id: input_select.bojler_start_reason
+    data:
+      option: none
+  - service: logbook.log
+    data:
+      name: Bojler Flexibilná Automatizácia
+      message: "\U0001F527 Bojler vypnutý manuálne - reset automatiky"
+  id: 2127731ccd7743778b721b9788e4f669
 - id: aquarium_slot1
   alias: Akvárium - Slot 1
   description: Automatizácia pre časový slot 1 - Ranné zapnutie
@@ -557,9 +815,9 @@
           = is_state('binary_sensor.t2_aktivna', 'on') and is_state('input_boolean.bojler_ariston_enable_t2',
           'on') %} {% set t3_ok = is_state('binary_sensor.t3_aktivna', 'on') and is_state('input_boolean.bojler_ariston_enable_t3',
           'on') %} {% set surplus_ok = is_state('input_boolean.bojler_ariston_enable_surplus',
-          'on') and\\n                    states('sensor.active_power') | float(0)
+          'on') and\n                    states('sensor.active_power') | float(0)
           > states('input_number.bojler_ariston_surplus_threshold_on') | float(2000)
-          %}\\n{{ not (t1_ok or t2_ok or t3_ok or surplus_ok) }}\\n"
+          %}\n{{ not (t1_ok or t2_ok or t3_ok or surplus_ok) }}\n"
   action:
   - service: switch.turn_off
     target:
@@ -657,16 +915,15 @@
     entity_id: switch.klima_cojirbfaaai_power_switch
     state: 'on'
   - condition: template
-    value_template: "{% set t1_active = is_state('binary_sensor.t1_aktivna', 'on')\
-      \ %} {% set t2_active = is_state('binary_sensor.t2_aktivna', 'on') %} {% set\
-      \ t3_active = is_state('binary_sensor.t3_aktivna', 'on') %} {% set t4_active\
-      \ = is_state('binary_sensor.t4_aktivna', 'on') %} {% set t1_allowed = is_state('input_boolean.klima_enable_t1',\
-      \ 'on') %} {% set t2_allowed = is_state('input_boolean.klima_enable_t2', 'on')\
-      \ %} {% set t3_allowed = is_state('input_boolean.klima_enable_t3', 'on') %}\
-      \ {% set t4_allowed = is_state('input_boolean.klima_enable_t4', 'on') %} {{\
-      \ (t1_active and not t1_allowed) or \\n   (t2_active and not t2_allowed) or\
-      \ \\n   (t3_active and not t3_allowed) or \\n   (t4_active and not t4_allowed)\
-      \ }}\\n"
+    value_template: "{% set t1_active = is_state('binary_sensor.t1_aktivna', 'on')
+      %} {% set t2_active = is_state('binary_sensor.t2_aktivna', 'on') %} {% set t3_active
+      = is_state('binary_sensor.t3_aktivna', 'on') %} {% set t4_active = is_state('binary_sensor.t4_aktivna',
+      'on') %} {% set t1_allowed = is_state('input_boolean.klima_enable_t1', 'on')
+      %} {% set t2_allowed = is_state('input_boolean.klima_enable_t2', 'on') %} {%
+      set t3_allowed = is_state('input_boolean.klima_enable_t3', 'on') %} {% set t4_allowed
+      = is_state('input_boolean.klima_enable_t4', 'on') %} {{ (t1_active and not t1_allowed)
+      or \n   (t2_active and not t2_allowed) or \n   (t3_active and not t3_allowed)
+      or \n   (t4_active and not t4_allowed) }}\n"
   action:
   - service: input_boolean.turn_on
     target:
@@ -716,15 +973,15 @@
     entity_id: switch.klima_cojirbfaaai_power_switch
     state: 'off'
   - condition: template
-    value_template: "{% set t1_active = is_state('binary_sensor.t1_aktivna', 'on')\
-      \ %} {% set t2_active = is_state('binary_sensor.t2_aktivna', 'on') %} {% set\
-      \ t3_active = is_state('binary_sensor.t3_aktivna', 'on') %} {% set t4_active\
-      \ = is_state('binary_sensor.t4_aktivna', 'on') %} {% set t1_allowed = is_state('input_boolean.klima_enable_t1',\
-      \ 'on') %} {% set t2_allowed = is_state('input_boolean.klima_enable_t2', 'on')\
-      \ %} {% set t3_allowed = is_state('input_boolean.klima_enable_t3', 'on') %}\
-      \ {% set t4_allowed = is_state('input_boolean.klima_enable_t4', 'on') %} {{\
-      \ (t1_active and t1_allowed) or \\n   (t2_active and t2_allowed) or \\n   (t3_active\
-      \ and t3_allowed) or \\n   (t4_active and t4_allowed) }}\\n"
+    value_template: "{% set t1_active = is_state('binary_sensor.t1_aktivna', 'on')
+      %} {% set t2_active = is_state('binary_sensor.t2_aktivna', 'on') %} {% set t3_active
+      = is_state('binary_sensor.t3_aktivna', 'on') %} {% set t4_active = is_state('binary_sensor.t4_aktivna',
+      'on') %} {% set t1_allowed = is_state('input_boolean.klima_enable_t1', 'on')
+      %} {% set t2_allowed = is_state('input_boolean.klima_enable_t2', 'on') %} {%
+      set t3_allowed = is_state('input_boolean.klima_enable_t3', 'on') %} {% set t4_allowed
+      = is_state('input_boolean.klima_enable_t4', 'on') %} {{ (t1_active and t1_allowed)
+      or \n   (t2_active and t2_allowed) or \n   (t3_active and t3_allowed) or \n
+      \  (t4_active and t4_allowed) }}\n"
   action:
   - service: switch.turn_on
     target:
@@ -754,17 +1011,16 @@
     entity_id: input_boolean.klima_was_on_before_shutoff
     state: 'on'
   - condition: template
-    value_template: "{% set t1_active = is_state('binary_sensor.t1_aktivna', 'on')\
-      \ %} {% set t2_active = is_state('binary_sensor.t2_aktivna', 'on') %} {% set\
-      \ t3_active = is_state('binary_sensor.t3_aktivna', 'on') %} {% set t4_active\
-      \ = is_state('binary_sensor.t4_aktivna', 'on') %} {% set t1_allowed = is_state('input_boolean.klima_enable_t1',\
-      \ 'on') %} {% set t2_allowed = is_state('input_boolean.klima_enable_t2', 'on')\
-      \ %} {% set t3_allowed = is_state('input_boolean.klima_enable_t3', 'on') %}\
-      \ {% set t4_allowed = is_state('input_boolean.klima_enable_t4', 'on') %} {%\
-      \ set forbidden = (t1_active and not t1_allowed) or \\n                   (t2_active\
-      \ and not t2_allowed) or \\n                   (t3_active and not t3_allowed)\
-      \ or \\n                   (t4_active and not t4_allowed) %}\\n{{ not forbidden\
-      \ }}\\n"
+    value_template: "{% set t1_active = is_state('binary_sensor.t1_aktivna', 'on')
+      %} {% set t2_active = is_state('binary_sensor.t2_aktivna', 'on') %} {% set t3_active
+      = is_state('binary_sensor.t3_aktivna', 'on') %} {% set t4_active = is_state('binary_sensor.t4_aktivna',
+      'on') %} {% set t1_allowed = is_state('input_boolean.klima_enable_t1', 'on')
+      %} {% set t2_allowed = is_state('input_boolean.klima_enable_t2', 'on') %} {%
+      set t3_allowed = is_state('input_boolean.klima_enable_t3', 'on') %} {% set t4_allowed
+      = is_state('input_boolean.klima_enable_t4', 'on') %} {% set forbidden = (t1_active
+      and not t1_allowed) or \n                   (t2_active and not t2_allowed) or
+      \n                   (t3_active and not t3_allowed) or \n                   (t4_active
+      and not t4_allowed) %}\n{{ not forbidden }}\n"
   action:
   - service: input_boolean.turn_off
     target:
@@ -789,16 +1045,15 @@
     entity_id: input_boolean.klima_manual_override
     state: 'off'
   - condition: template
-    value_template: "{% set t1_active = is_state('binary_sensor.t1_aktivna', 'on')\
-      \ %} {% set t2_active = is_state('binary_sensor.t2_aktivna', 'on') %} {% set\
-      \ t3_active = is_state('binary_sensor.t3_aktivna', 'on') %} {% set t4_active\
-      \ = is_state('binary_sensor.t4_aktivna', 'on') %} {% set t1_allowed = is_state('input_boolean.klima_enable_t1',\
-      \ 'on') %} {% set t2_allowed = is_state('input_boolean.klima_enable_t2', 'on')\
-      \ %} {% set t3_allowed = is_state('input_boolean.klima_enable_t3', 'on') %}\
-      \ {% set t4_allowed = is_state('input_boolean.klima_enable_t4', 'on') %} {{\
-      \ (t1_active and not t1_allowed) or \\n   (t2_active and not t2_allowed) or\
-      \ \\n   (t3_active and not t3_allowed) or \\n   (t4_active and not t4_allowed)\
-      \ }}\\n"
+    value_template: "{% set t1_active = is_state('binary_sensor.t1_aktivna', 'on')
+      %} {% set t2_active = is_state('binary_sensor.t2_aktivna', 'on') %} {% set t3_active
+      = is_state('binary_sensor.t3_aktivna', 'on') %} {% set t4_active = is_state('binary_sensor.t4_aktivna',
+      'on') %} {% set t1_allowed = is_state('input_boolean.klima_enable_t1', 'on')
+      %} {% set t2_allowed = is_state('input_boolean.klima_enable_t2', 'on') %} {%
+      set t3_allowed = is_state('input_boolean.klima_enable_t3', 'on') %} {% set t4_allowed
+      = is_state('input_boolean.klima_enable_t4', 'on') %} {{ (t1_active and not t1_allowed)
+      or \n   (t2_active and not t2_allowed) or \n   (t3_active and not t3_allowed)
+      or \n   (t4_active and not t4_allowed) }}\n"
   action:
   - service: input_boolean.turn_on
     target:
@@ -1009,10 +1264,10 @@
     state: 'on'
   action:
   - variables:
-      klima_power_kw: "{% set energy_today = states('sensor.klima_cojirbfaaai_today_energy_consumption')\
-        \ | float(0) %} {% set work_time_min = states('sensor.klima_cojirbfaaai_today_work_time')\
-        \ | float(1) %} {% if work_time_min > 0 %}\\n  {{ (energy_today / (work_time_min\
-        \ / 60)) }}\\n{% else %}\\n  1.0\\n{% endif %}\\n"
+      klima_power_kw: "{% set energy_today = states('sensor.klima_cojirbfaaai_today_energy_consumption')
+        | float(0) %} {% set work_time_min = states('sensor.klima_cojirbfaaai_today_work_time')
+        | float(1) %} {% if work_time_min > 0 %}\n  {{ (energy_today / (work_time_min
+        / 60)) }}\n{% else %}\n  1.0\n{% endif %}\n"
       energy_5min: '{{ (klima_power_kw | float(1.0) * 5 / 60) | round(4) }}'
       price_kwh: '{{ state_attr(''sensor.aktualna_tarifa'', ''price_eur_kwh'') | float(0)
         }}'
@@ -1151,10 +1406,10 @@
   - service: logbook.log
     data:
       name: Cost Tracking
-      message: "\U0001F4CA Mesačný report - Klíma: {{ states('input_number.cost_monthly_klima')\
-        \ | round(2) }} EUR, Dražice: {{ states('input_number.cost_monthly_bojler_drazice')\
-        \ | round(2) }} EUR, Ariston: {{ states('input_number.cost_monthly_bojler_ariston')\
-        \ | round(2) }} EUR\n"
+      message: "\U0001F4CA Mesačný report - Klíma: {{ states('input_number.cost_monthly_klima')
+        | round(2) }} EUR, Dražice: {{ states('input_number.cost_monthly_bojler_drazice')
+        | round(2) }} EUR, Ariston: {{ states('input_number.cost_monthly_bojler_ariston')
+        | round(2) }} EUR\n"
   - service: input_number.set_value
     target:
       entity_id:
@@ -1199,13 +1454,13 @@
 - id: vetranie_co2_low
   alias: Vetranie - CO2 nízke - znížiť
   description: Pri nízkom CO2 vráti stupeň vetrania na predchádzajúci
-  trigger:
-  - platform: numeric_state
-    entity_id: sensor.wifi_smart_switch_carbon_dioxide
+  triggers:
+  - entity_id: sensor.wifi_smart_switch_carbon_dioxide
     below: input_number.vetranie_co2_threshold_low
     for:
       minutes: 5
-  condition:
+    trigger: numeric_state
+  conditions:
   - condition: state
     entity_id: input_boolean.vetranie_co2_auto_enabled
     state: 'on'
@@ -1216,15 +1471,15 @@
     value_template: '{{ states(''input_number.vetranie_stupen'') | int > 1 }}
 
       '
-  action:
-  - service: script.vetranie_nastav_stupen
-    data:
-      stupen: 1
-  - service: logbook.log
-    data:
+  actions:
+  - data:
+      stupen: 2
+    action: script.vetranie_nastav_stupen
+  - data:
       name: Vetranie CO2
       message: ⬇️ CO2 nízke ({{ states('sensor.wifi_smart_switch_carbon_dioxide')
         }} ppm) - stupeň znížený na 1
+    action: logbook.log
   mode: single
 - id: vetranie_forced_off_activated
   alias: Vetranie - Forced OFF aktivované
