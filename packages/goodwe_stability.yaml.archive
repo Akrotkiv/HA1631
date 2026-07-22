@@ -1,0 +1,170 @@
+# ============================================
+# GOODWE STABILITY WRAPPER
+# packages/goodwe_stability.yaml
+# ============================================
+#
+# Problem: GoodWe UDP polling (5s interval) → po 3 zlyhaných
+#          pokusoch (15s) ide entita na unavailable.
+#
+# Riešenie:
+#   - input_number buffers = posledné platné hodnoty
+#   - template senzory = active_power ak dostupný, inak buffer
+#   - binary_sensor.goodwe_online = stav invertora
+#   - alert pri výpadku > 5 minút
+#
+# Senzory pre zvyšok systému (používaj tieto, nie surové goodwe):
+#   sensor.grid_power        — sieť: >0 export (prebytky), <0 import
+#   sensor.pv_power          — aktuálny výkon FVE (W)
+#   binary_sensor.goodwe_online
+# ============================================
+
+# ================================
+# BUFFERS — posledné platné hodnoty
+# ================================
+
+input_number:
+  goodwe_active_power_buffer:
+    name: "GoodWe - Active Power buffer"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: 0
+    unit_of_measurement: "W"
+    mode: box
+    icon: mdi:transmission-tower
+
+  goodwe_pv_power_buffer:
+    name: "GoodWe - PV Power buffer"
+    min: 0
+    max: 30000
+    step: 1
+    initial: 0
+    unit_of_measurement: "W"
+    mode: box
+    icon: mdi:solar-power
+
+# ================================
+# TEMPLATE SENSORS
+# ================================
+
+template:
+  - binary_sensor:
+      - name: "GoodWe Online"
+        unique_id: goodwe_online
+        state: >
+          {{ states('sensor.active_power') not in ['unavailable', 'unknown'] }}
+        device_class: connectivity
+        icon: >
+          {% if is_state('binary_sensor.goodwe_online', 'on') %}
+            mdi:solar-panel
+          {% else %}
+            mdi:solar-panel-large
+          {% endif %}
+
+  - sensor:
+      # Grid power — použiteľný aj počas krátkych výpadkov GoodWe
+      - name: "Grid Power"
+        unique_id: grid_power_stable
+        state: >
+          {% if states('sensor.active_power') not in ['unavailable', 'unknown'] %}
+            {{ states('sensor.active_power') | float(0) | round(0) }}
+          {% else %}
+            {{ states('input_number.goodwe_active_power_buffer') | float(0) | round(0) }}
+          {% endif %}
+        unit_of_measurement: "W"
+        device_class: power
+        icon: mdi:transmission-tower
+        attributes:
+          source: >
+            {% if states('sensor.active_power') not in ['unavailable', 'unknown'] %}
+              live
+            {% else %}
+              buffer
+            {% endif %}
+          last_live: "{{ states('input_number.goodwe_active_power_buffer') }}"
+
+      # PV power — stabilný senzor výkonu panelov
+      - name: "PV Power Stable"
+        unique_id: pv_power_stable
+        state: >
+          {% if states('sensor.pv_power') not in ['unavailable', 'unknown'] %}
+            {{ states('sensor.pv_power') | float(0) | round(0) }}
+          {% else %}
+            {{ states('input_number.goodwe_pv_power_buffer') | float(0) | round(0) }}
+          {% endif %}
+        unit_of_measurement: "W"
+        device_class: power
+        icon: mdi:solar-power
+        attributes:
+          source: >
+            {% if states('sensor.pv_power') not in ['unavailable', 'unknown'] %}
+              live
+            {% else %}
+              buffer
+            {% endif %}
+
+# ================================
+# AUTOMATIZÁCIE
+# ================================
+
+automation:
+  # Aktualizácia bufferov keď je GoodWe online
+  - id: goodwe_update_buffers
+    alias: "GoodWe - Aktualizácia bufferov"
+    description: >
+      Každých 10s uloží posledné platné hodnoty do bufferov.
+      Buffers sa použijú keď GoodWe vypadne.
+    mode: single
+    max_exceeded: silent
+    trigger:
+      - platform: time_pattern
+        seconds: "/10"
+    condition:
+      - condition: template
+        value_template: >
+          {{ states('sensor.active_power') not in ['unavailable', 'unknown'] }}
+    action:
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.goodwe_active_power_buffer
+        data:
+          value: "{{ states('sensor.active_power') | float(0) | round(0) }}"
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.goodwe_pv_power_buffer
+        data:
+          value: "{{ states('sensor.pv_power') | float(0) | round(0) }}"
+
+  # Alert pri dlhom výpadku (> 5 minút)
+  - id: goodwe_offline_alert
+    alias: "GoodWe - Alert pri výpadku"
+    description: Notifikácia ak je GoodWe offline viac ako 5 minút.
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.goodwe_online
+        to: "off"
+        for:
+          minutes: 5
+    action:
+      - service: persistent_notification.create
+        data:
+          title: "⚠️ GoodWe offline"
+          message: >
+            Invertor neodpovedá viac ako 5 minút.
+            Posledná známa hodnota siete: {{ states('input_number.goodwe_active_power_buffer') }} W
+            Posledná známa hodnota FVE: {{ states('input_number.goodwe_pv_power_buffer') }} W
+          notification_id: goodwe_offline
+
+  # Zruš notifikáciu keď sa GoodWe vráti
+  - id: goodwe_back_online
+    alias: "GoodWe - Späť online"
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.goodwe_online
+        to: "on"
+    action:
+      - service: persistent_notification.dismiss
+        data:
+          notification_id: goodwe_offline

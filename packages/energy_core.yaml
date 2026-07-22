@@ -1,0 +1,184 @@
+# ============================================
+# ENERGY CORE
+# packages/energy_core.yaml
+#
+# GoodWe stabilita + výpočet prebytkov
+#
+# Surové GoodWe entity:
+#   sensor.active_power        >0 = export do siete, <0 = odber
+#   sensor.pv_power            výkon FVE (W)
+#   sensor.load                spotreba domu (W)
+#   sensor.goodwe_battery_state_of_charge  SOC domácej batérie (%)
+#
+# Výstupné entity pre zvyšok systému:
+#   sensor.gw_grid_power       stabilný, nikdy unavailable (brutto — EV nevidí)
+#   sensor.gw_pv_power         stabilný, nikdy unavailable
+#   sensor.gw_load_power       stabilný, nikdy unavailable
+#   sensor.gw_surplus          prebytky dostupné pre zaťaženie (W)
+#   sensor.gw_grid_net         reálny tok do/zo siete = brutto − nabíjanie EV (W)
+#   binary_sensor.gw_online    stav GoodWe invertora
+# ============================================
+
+input_number:
+  gw_grid_power_buffer:
+    name: "GW - Grid Power buffer"
+    min: -30000
+    max: 30000
+    step: 1
+    initial: 0
+    unit_of_measurement: "W"
+    mode: box
+
+  gw_pv_power_buffer:
+    name: "GW - PV Power buffer"
+    min: 0
+    max: 30000
+    step: 1
+    initial: 0
+    unit_of_measurement: "W"
+    mode: box
+
+  gw_load_power_buffer:
+    name: "GW - Load Power buffer"
+    min: 0
+    max: 30000
+    step: 1
+    initial: 0
+    unit_of_measurement: "W"
+    mode: box
+
+template:
+  - binary_sensor:
+      - name: "GW Online"
+        unique_id: gw_online
+        device_class: connectivity
+        state: >
+          {{ states('sensor.active_power') not in ['unavailable', 'unknown'] }}
+
+  - sensor:
+      - name: "GW Grid Power"
+        unique_id: gw_grid_power
+        unit_of_measurement: "W"
+        device_class: power
+        state: >
+          {% if states('sensor.active_power') not in ['unavailable', 'unknown'] %}
+            {{ states('sensor.active_power') | float(0) | round(0) }}
+          {% else %}
+            {{ states('input_number.gw_grid_power_buffer') | float(0) | round(0) }}
+          {% endif %}
+        attributes:
+          live: >
+            {{ states('sensor.active_power') not in ['unavailable', 'unknown'] }}
+
+      - name: "GW PV Power"
+        unique_id: gw_pv_power
+        unit_of_measurement: "W"
+        device_class: power
+        state: >
+          {% if states('sensor.pv_power') not in ['unavailable', 'unknown'] %}
+            {{ states('sensor.pv_power') | float(0) | round(0) }}
+          {% else %}
+            {{ states('input_number.gw_pv_power_buffer') | float(0) | round(0) }}
+          {% endif %}
+        attributes:
+          live: >
+            {{ states('sensor.pv_power') not in ['unavailable', 'unknown'] }}
+
+      - name: "GW Load Power"
+        unique_id: gw_load_power
+        unit_of_measurement: "W"
+        device_class: power
+        state: >
+          {% if states('sensor.load') not in ['unavailable', 'unknown'] %}
+            {{ states('sensor.load') | float(0) | round(0) }}
+          {% else %}
+            {{ states('input_number.gw_load_power_buffer') | float(0) | round(0) }}
+          {% endif %}
+        attributes:
+          live: >
+            {{ states('sensor.load') not in ['unavailable', 'unknown'] }}
+
+      # Prebytky = čo GoodWe exportuje do siete (>0)
+      # active_power > 0 znamená že FVE vyrába viac ako dom spotrebuje
+      # Používame priamo grid power — to je presne surplus dostupný externému zariadeniu
+      - name: "GW Surplus"
+        unique_id: gw_surplus
+        unit_of_measurement: "W"
+        device_class: power
+        state: >
+          {{ [states('sensor.gw_grid_power') | float(0), 0] | max | round(0) }}
+
+      # Reálny tok do/zo siete (>0 = export, <0 = odber).
+      # Vestel nabíjačka NIE je v okruhu GoodWe energymetra, takže gw_grid_power
+      # (active_power) odber auta nevidí a počas nabíjania ukazuje stále brutto
+      # prebytok. Skutočná sieť = brutto grid − výkon nabíjania.
+      - name: "GW Grid Net"
+        unique_id: gw_grid_net
+        unit_of_measurement: "W"
+        device_class: power
+        icon: mdi:transmission-tower
+        state: >
+          {% set grid = states('sensor.gw_grid_power') | float(0) %}
+          {% set ev = (states('sensor.ev_charging_power') | float(0) * 1000)
+                      if is_state('sensor.hacharger_status_connector', 'Charging') else 0 %}
+          {{ (grid - ev) | round(0) }}
+
+automation:
+  - id: gw_update_buffers
+    alias: "GW - Aktualizácia bufferov"
+    mode: single
+    max_exceeded: silent
+    trigger:
+      - platform: time_pattern
+        seconds: "/10"
+    condition:
+      - condition: state
+        entity_id: binary_sensor.gw_online
+        state: "on"
+    action:
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.gw_grid_power_buffer
+        data:
+          value: "{{ states('sensor.active_power') | float(0) | round(0) }}"
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.gw_pv_power_buffer
+        data:
+          value: "{{ states('sensor.pv_power') | float(0) | round(0) }}"
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.gw_load_power_buffer
+        data:
+          value: "{{ states('sensor.load') | float(0) | round(0) }}"
+
+  - id: gw_offline_alert
+    alias: "GW - Alert pri výpadku > 5 min"
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.gw_online
+        to: "off"
+        for:
+          minutes: 5
+    action:
+      - service: persistent_notification.create
+        data:
+          title: "⚠️ GoodWe offline"
+          message: >
+            Invertor neodpovedá > 5 minút.
+            Posledné hodnoty: sieť {{ states('input_number.gw_grid_power_buffer') }}W,
+            FVE {{ states('input_number.gw_pv_power_buffer') }}W
+          notification_id: gw_offline
+
+  - id: gw_back_online
+    alias: "GW - Späť online"
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.gw_online
+        to: "on"
+    action:
+      - service: persistent_notification.dismiss
+        data:
+          notification_id: gw_offline

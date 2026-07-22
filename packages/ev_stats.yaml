@@ -1,0 +1,116 @@
+# ============================================
+# EV STATS — ovládanie období pre sessions dashboard
+# packages/ev_stats.yaml
+#
+# input_select.ev_stats_period  : Mesiac / Rok / Celkom
+# input_number.ev_stats_offset  : 0 = aktuálne, +1 = predošlé obdobie ...
+#
+# Pri zmene → zapíše /config/.ev_stats.json a prepočíta sensor.ev_sessions_table.
+# ============================================
+
+input_select:
+  ev_stats_period:
+    name: "EV Stats - Obdobie"
+    options:
+      - "Mesiac"
+      - "Rok"
+      - "Celkom"
+    initial: "Mesiac"
+    icon: mdi:calendar-range
+
+  # Metrika grafu — riadi sa klientsky (button-card číta priamo tento input_select)
+  ev_stats_metric:
+    name: "EV Stats - Metrika"
+    options:
+      - "Solar"
+      - "Cena"
+    initial: "Solar"
+    icon: mdi:chart-bar
+
+  # Filter tabuľky podľa auta (ide cez ctrl súbor → skript filtruje sessions)
+  ev_stats_vehicle:
+    name: "EV Stats - Filter auto"
+    options:
+      - "Všetky"
+      - "mysan"
+      - "vojtesla"
+    initial: "Všetky"
+    icon: mdi:car-search
+
+input_number:
+  ev_stats_offset:
+    name: "EV Stats - Posun obdobia"
+    min: 0
+    max: 60
+    step: 1
+    initial: 0
+    mode: box
+    icon: mdi:arrow-left-right
+
+automation:
+  # Pri zmene obdobia / posunu → zapíš ctrl súbor a prepočítaj
+  - id: ev_stats_refresh
+    alias: "EV Stats - Refresh pri zmene obdobia"
+    mode: queued
+    trigger:
+      - platform: state
+        entity_id:
+          - input_select.ev_stats_period
+          - input_number.ev_stats_offset
+          - input_select.ev_stats_vehicle
+      - platform: homeassistant
+        event: start
+    action:
+      - service: shell_command.ev_write_stats_ctrl
+        data:
+          period: "{{ states('input_select.ev_stats_period') }}"
+          offset: "{{ states('input_number.ev_stats_offset') | int(0) }}"
+          metric: "{{ states('input_select.ev_stats_metric') }}"
+          vehicle: "{{ states('input_select.ev_stats_vehicle') }}"
+      - delay:
+          milliseconds: 300
+      - service: homeassistant.update_entity
+        target:
+          entity_id: sensor.ev_sessions_table
+
+  # Naplň filter áut dynamicky zo zoznamu áut v dátach (sensor.ev_sessions_table.vehicles)
+  - id: ev_stats_vehicle_options
+    alias: "EV Stats - Filter áut z dát"
+    mode: single
+    trigger:
+      - platform: homeassistant
+        event: start
+      - platform: state
+        entity_id: sensor.ev_sessions_table
+        attribute: vehicles
+    action:
+      - delay:
+          seconds: 2
+      - variables:
+          vs: "{{ state_attr('sensor.ev_sessions_table', 'vehicles') or [] }}"
+      - condition: template
+        value_template: >
+          {{ vs | length > 0
+             and (['Všetky'] + vs) != (state_attr('input_select.ev_stats_vehicle', 'options') or []) }}
+      - service: input_select.set_options
+        target:
+          entity_id: input_select.ev_stats_vehicle
+        data:
+          options: "{{ ['Všetky'] + vs }}"
+
+  # Pri prepnutí obdobia vynuluj posun (začni od aktuálneho)
+  - id: ev_stats_reset_offset
+    alias: "EV Stats - Reset posunu pri zmene obdobia"
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: input_select.ev_stats_period
+    condition:
+      - condition: template
+        value_template: "{{ states('input_number.ev_stats_offset') | int(0) != 0 }}"
+    action:
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.ev_stats_offset
+        data:
+          value: 0

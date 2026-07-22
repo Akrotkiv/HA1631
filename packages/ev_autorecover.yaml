@@ -1,0 +1,153 @@
+# ============================================
+# EV AUTO-RECOVERY  (izolovaný plugin)
+# packages/ev_autorecover.yaml
+#
+# Deteguje "zaseknuté" nabíjanie: režim chce vysoký prúd (cieľ >= 10 A),
+# ale auto reálne ťahá málo (<= 8 A) dlhšie ako 5 min a cieľ nie je dosiahnutý.
+# Typicky zaseknutý pilot signál nabíjačky (drží ~6 A namiesto nastaveného limitu).
+#
+# Akcia: upozorní (persistent notification) + skúsi jemný reštart transakcie
+#        (script.ev_restart_charging). Tvrdý OCPP reset zostáva manuálny
+#        (button.hacharger_reset) — kým overíš, že spoľahlivo obnoví nabíjanie.
+#
+# ZAPNUTIE/VYPNUTIE: input_boolean.ev_autorecover  (default OFF — nič nerobí, kým ho nezapneš)
+# Nezasahuje do žiadnej inej logiky; celý plugin zmažeš odstránením tohto súboru
+# a jeho include riadku v configuration.yaml.
+#
+# 2) UPOZORNENIE "nenabíja" (vždy aktívne, len notifikuje, žiadny OCPP reset):
+#    binary_sensor.ev_not_charging_problem → ak auto pripojené, nič neblokuje,
+#    ale nabíjačka 8 min nenabíja (zaseknutý "Finishing") → notifikácia na telefón
+#    + HA, že treba reštart ističom. Auto-reset ističa sa spraviť nedá.
+# ============================================
+
+input_boolean:
+  ev_autorecover:
+    name: "EV - Auto-recovery zaseknutia"
+    icon: mdi:auto-fix
+
+template:
+  - binary_sensor:
+      - name: "EV Charging Stuck"
+        unique_id: ev_charging_stuck
+        device_class: problem
+        icon: mdi:alert-circle
+        # STUCK len ak charger ponúka málo (nízky pilot) — t.j. NEdodáva nastavený
+        # prúd. Pri taper-i (auto si samo znižuje blízko plného) je pilot VYSOKÝ →
+        # to nie je zaseknutie, len BMS auta. Bez tejto podmienky bol falošný poplach.
+        state: >
+          {{ is_state('sensor.hacharger_status_connector','Charging')
+             and is_state('input_boolean.ev_charging_blocked','off')
+             and is_state('sensor.ev_target_reached','false')
+             and states('sensor.ev_target_current') | int(0) >= 10
+             and states('sensor.mysan_charge_current') not in ['unknown','unavailable']
+             and states('sensor.mysan_charge_current') | float(99) <= 8
+             and states('sensor.mysan_charge_current_limit') not in ['unknown','unavailable']
+             and states('sensor.mysan_charge_current_limit') | float(99) <= 8 }}
+
+      # NENASKOČÍ VÔBEC: auto pripojené, nič ho neblokuje (režim != Vyp, tarifa
+      # povolená, cieľ nedosiahnutý), ale nabíjačka NEnabíja a netečie žiadny výkon.
+      # Typicky zaseknutý OCPP stav "Finishing" (zombie transakcia) → pomôže iba
+      # reštart ističom. (blokované/pauza/Vyp/zlá tarifa/cieľ = legitímne, netýka sa.)
+      - name: "EV Not Charging Problem"
+        unique_id: ev_not_charging_problem
+        device_class: problem
+        icon: mdi:flash-off
+        state: >
+          {{ is_state('input_boolean.ev_cable_connected','on')
+             and is_state('input_boolean.ev_charging_blocked','off')
+             and not is_state('input_select.ev_charge_mode','Vyp')
+             and is_state('sensor.ev_tariff_allowed','true')
+             and is_state('sensor.ev_target_reached','false')
+             and not is_state('sensor.hacharger_status_connector','Charging')
+             and states('sensor.mysan_charge_power') | float(0) < 0.2 }}
+
+automation:
+  - id: ev_autorecover_stuck
+    alias: "EV - Auto-recovery zaseknutého nabíjania"
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.ev_charging_stuck
+        to: "on"
+        for:
+          minutes: 5
+    condition:
+      - condition: state
+        entity_id: input_boolean.ev_autorecover
+        state: "on"
+      # cooldown: nereaguj častejšie ako raz za 15 min
+      - condition: template
+        value_template: >
+          {{ this.attributes.last_triggered is none
+             or (now() - this.attributes.last_triggered).total_seconds() > 900 }}
+    action:
+      - service: logbook.log
+        data:
+          name: "EV Auto-recovery"
+          message: >
+            ⚠️ Nabíjanie zaseknuté — cieľ {{ states('sensor.ev_target_current') }} A,
+            reálne {{ states('sensor.mysan_charge_current') }} A. Spúšťam obnovu (OCPP reset + štart).
+      - service: persistent_notification.create
+        data:
+          title: "⚠️ EV nabíjanie zaseknuté"
+          message: >
+            Cieľový prúd {{ states('sensor.ev_target_current') }} A, ale auto ťahá len
+            {{ states('sensor.mysan_charge_current') }} A. Spúšťam **obnovu (OCPP reset + štart)** —
+            nabíjačka sa na ~1 min reštartuje, potom by malo nabehnúť na plný prúd.
+          notification_id: ev_stuck
+      - service: script.turn_on
+        target:
+          entity_id: script.ev_restart_charging
+
+  # ------------------------------------------------
+  # UPOZORNENIE: nabíjanie nenaskočilo (telefón + HA)
+  # Vždy aktívne (nezávisí od input_boolean.ev_autorecover).
+  # Len notifikuje — NErobí OCPP reset (ten visí). Riešenie = reštart ističom.
+  # ------------------------------------------------
+  - id: ev_not_charging_alert
+    alias: "EV - Upozornenie: nenabíja"
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.ev_not_charging_problem
+        to: "on"
+        for:
+          minutes: 8
+    action:
+      - service: notify.mobile_app_sm_s911b
+        continue_on_error: true
+        data:
+          title: "⚠️ EV: nabíjanie nenaskočilo"
+          message: >
+            Auto je pripojené a nič ho neblokuje, ale nabíjačka už 8 min nenabíja
+            (stav: {{ states('sensor.hacharger_status_connector') }}, SOC
+            {{ states('sensor.mysan_battery_level') }} %). Možno je zaseknutá v „Finishing"
+            — pomôže reštart ističom nabíjačky (~30 s vyp/zap).
+      - service: persistent_notification.create
+        data:
+          title: "⚠️ EV: nabíjanie nenaskočilo"
+          message: >
+            Auto pripojené, nič neblokuje, ale nabíjačka už 8 min nenabíja
+            (stav: {{ states('sensor.hacharger_status_connector') }}, výkon
+            {{ states('sensor.mysan_charge_power') }} kW). Pravdepodobne zaseknutý
+            stav „Finishing" → **reštart ističom nabíjačky** (~30 s vyp/zap).
+          notification_id: ev_not_charging
+      - service: logbook.log
+        data:
+          name: "EV Auto-recovery"
+          message: >
+            🔌 Nabíjanie nenaskočilo 8 min (stav {{ states('sensor.hacharger_status_connector') }})
+            — upozornenie odoslané.
+
+  # Zrušenie upozornenia, keď sa nabíjanie rozbehne (alebo dôvod pominie)
+  - id: ev_not_charging_clear
+    alias: "EV - Upozornenie zrušiť (nabíja)"
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.ev_not_charging_problem
+        to: "off"
+    action:
+      - service: persistent_notification.dismiss
+        data:
+          notification_id: ev_not_charging

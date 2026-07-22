@@ -1,0 +1,861 @@
+# ============================================
+# EV & ENERGIA — YAML dashboard
+# dashboards/ev_energy.yaml
+# ============================================
+title: EV & Energia
+views:
+  # ==========================================================
+  # POHĽAD 1 — PREHĽAD
+  # ==========================================================
+  - title: Prehľad
+    path: prehlad
+    icon: mdi:view-dashboard
+    cards:
+      # --- 🔧 Núdzový manuál (kill switch) ---
+      - type: entities
+        title: 🔧 Núdzový manuál
+        state_color: true
+        entities:
+          - entity: input_boolean.ev_manual_mode
+            name: "⛔ Vypnúť automatiku (manuál)"
+          - type: section
+            label: "Ručné ovládanie (keď je automatika vypnutá)"
+          - entity: switch.hacharger_charge_control
+            name: "▶ Nabíjať (štart/stop)"
+          - entity: number.hacharger_maximum_current
+            name: "⚡ Prúd (A)"
+
+      # --- Batéria + dojazd (výrazné) ---
+      - type: horizontal-stack
+        cards:
+          - type: gauge
+            entity: sensor.mysan_battery_level
+            name: Batéria
+            min: 0
+            max: 100
+            needle: true
+            severity:
+              green: 50
+              yellow: 20
+              red: 0
+          - type: gauge
+            entity: sensor.mysan_estimated_range
+            name: Dojazd
+            unit: km
+            min: 0
+            max: 300
+            needle: true
+            severity:
+              green: 150
+              yellow: 70
+              red: 0
+
+      # --- Stav nabíjačky + tarifa ---
+      - type: glance
+        title: Stav
+        columns: 3
+        entities:
+          - entity: sensor.hacharger_status_connector
+            name: Nabíjačka
+          - entity: sensor.ev_tarifa
+            name: Tarifa
+          - entity: sensor.ev_cena_kwh
+            name: Cena
+          - entity: binary_sensor.gw_online
+            name: GoodWe
+          - entity: sensor.mysan_battery_level
+            name: SOC
+          - entity: sensor.mysan_battery_health
+            name: SOH
+          - entity: sensor.mysan_odometer
+            name: Odometer
+          - entity: input_boolean.ev_charging_blocked
+            name: Pauza
+
+      # --- Energetický tok (GoodWe) ---
+      - type: glance
+        title: Energetický tok
+        columns: 4
+        entities:
+          - entity: sensor.gw_pv_power
+            name: FVE
+          - entity: sensor.gw_load_power
+            name: Dom
+          - entity: sensor.gw_grid_net
+            name: Sieť
+          - entity: sensor.gw_surplus
+            name: Prebytok
+          - entity: sensor.goodwe_battery_state_of_charge
+            name: Batéria
+          - entity: sensor.ev_charging_power
+            name: Nabíjanie
+
+      # --- Aktívna session (len keď nabíja) ---
+      - type: conditional
+        conditions:
+          - entity: input_boolean.ev_session_active
+            state: "on"
+        card:
+          type: entities
+          title: ⚡ Aktuálna session
+          state_color: true
+          entities:
+            - entity: input_number.ev_session_energy_kwh
+              name: Energia
+            - entity: input_number.ev_session_cost_eur
+              name: Náklady
+            - entity: sensor.ev_session_avg_price
+              name: Priem. cena
+            - entity: sensor.ev_session_solar_pct
+              name: Solar podiel
+            - entity: sensor.ev_session_duration
+              name: Trvanie
+            - entity: sensor.ev_tarifa
+              name: Tarifa
+
+      # --- Ovládanie nabíjania (užívateľské) ---
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: "### 🔌 Ovládanie nabíjania"
+
+          # Režim ako tlačidlá (Fast / Min+Solar / Solar / Vyp)
+          - type: horizontal-stack
+            cards:
+              - type: custom:button-card
+                name: Fast
+                icon: mdi:flash
+                tap_action:
+                  action: call-service
+                  service: input_select.select_option
+                  service_data: { entity_id: input_select.ev_charge_mode, option: "Fast" }
+                styles:
+                  card:
+                    - border-radius: 10px
+                    - padding: 8px
+                    - color: white
+                    - background: |
+                        [[[ return states['input_select.ev_charge_mode'].state==='Fast' ? '#2563eb' : '#1f2937'; ]]]
+              - type: custom:button-card
+                name: Min+Solar
+                icon: mdi:solar-power
+                tap_action:
+                  action: call-service
+                  service: input_select.select_option
+                  service_data: { entity_id: input_select.ev_charge_mode, option: "Min+Solar" }
+                styles:
+                  card:
+                    - border-radius: 10px
+                    - padding: 8px
+                    - color: white
+                    - background: |
+                        [[[ return states['input_select.ev_charge_mode'].state==='Min+Solar' ? '#2563eb' : '#1f2937'; ]]]
+              - type: custom:button-card
+                name: Solar
+                icon: mdi:white-balance-sunny
+                tap_action:
+                  action: call-service
+                  service: input_select.select_option
+                  service_data: { entity_id: input_select.ev_charge_mode, option: "Solar" }
+                styles:
+                  card:
+                    - border-radius: 10px
+                    - padding: 8px
+                    - color: white
+                    - background: |
+                        [[[ return states['input_select.ev_charge_mode'].state==='Solar' ? '#2563eb' : '#1f2937'; ]]]
+              - type: custom:button-card
+                name: Vyp
+                icon: mdi:power-off
+                tap_action:
+                  action: call-service
+                  service: input_select.select_option
+                  service_data: { entity_id: input_select.ev_charge_mode, option: "Vyp" }
+                styles:
+                  card:
+                    - border-radius: 10px
+                    - padding: 8px
+                    - color: white
+                    - background: |
+                        [[[ return states['input_select.ev_charge_mode'].state==='Vyp' ? '#b91c1c' : '#1f2937'; ]]]
+
+          # Vozidlo ako tlačidlá
+          - type: horizontal-stack
+            cards:
+              - type: custom:button-card
+                name: Mysan
+                icon: mdi:car-electric
+                tap_action:
+                  action: call-service
+                  service: input_select.select_option
+                  service_data: { entity_id: input_select.ev_vehicle, option: "mysan" }
+                styles:
+                  card:
+                    - border-radius: 10px
+                    - padding: 8px
+                    - color: white
+                    - background: |
+                        [[[ return states['input_select.ev_vehicle'].state==='mysan' ? '#2563eb' : '#1f2937'; ]]]
+              - type: custom:button-card
+                name: Vojtesla
+                icon: mdi:car-sports
+                tap_action:
+                  action: call-service
+                  service: input_select.select_option
+                  service_data: { entity_id: input_select.ev_vehicle, option: "vojtesla" }
+                styles:
+                  card:
+                    - border-radius: 10px
+                    - padding: 8px
+                    - color: white
+                    - background: |
+                        [[[ return states['input_select.ev_vehicle'].state==='vojtesla' ? '#2563eb' : '#1f2937'; ]]]
+              - type: custom:button-card
+                name: Petschka
+                icon: mdi:car
+                tap_action:
+                  action: call-service
+                  service: input_select.select_option
+                  service_data: { entity_id: input_select.ev_vehicle, option: "Petschka" }
+                styles:
+                  card:
+                    - border-radius: 10px
+                    - padding: 8px
+                    - color: white
+                    - background: |
+                        [[[ return states['input_select.ev_vehicle'].state==='Petschka' ? '#2563eb' : '#1f2937'; ]]]
+              - type: custom:button-card
+                name: Hosť
+                icon: mdi:account-question
+                tap_action:
+                  action: call-service
+                  service: input_select.select_option
+                  service_data: { entity_id: input_select.ev_vehicle, option: "Hosť" }
+                styles:
+                  card:
+                    - border-radius: 10px
+                    - padding: 8px
+                    - color: white
+                    - background: |
+                        [[[ return states['input_select.ev_vehicle'].state==='Hosť' ? '#2563eb' : '#1f2937'; ]]]
+
+          # Cieľ ako tlačidlá (Bez cieľa / SOC / Dojazd)
+          - type: horizontal-stack
+            cards:
+              - type: custom:button-card
+                name: Bez cieľa
+                icon: mdi:infinity
+                tap_action:
+                  action: call-service
+                  service: input_select.select_option
+                  service_data:
+                    entity_id: input_select.ev_target_type
+                    option: "Žiadny"
+                styles:
+                  card:
+                    - border-radius: 10px
+                    - padding: 8px
+                    - color: white
+                    - background: |
+                        [[[ return states['input_select.ev_target_type'].state==='Žiadny' ? '#2563eb' : '#1f2937'; ]]]
+              - type: custom:button-card
+                name: SOC
+                icon: mdi:battery-charging-80
+                tap_action:
+                  action: call-service
+                  service: input_select.select_option
+                  service_data:
+                    entity_id: input_select.ev_target_type
+                    option: "SOC"
+                styles:
+                  card:
+                    - border-radius: 10px
+                    - padding: 8px
+                    - color: white
+                    - background: |
+                        [[[ return states['input_select.ev_target_type'].state==='SOC' ? '#2563eb' : '#1f2937'; ]]]
+              - type: custom:button-card
+                name: Dojazd
+                icon: mdi:map-marker-distance
+                tap_action:
+                  action: call-service
+                  service: input_select.select_option
+                  service_data:
+                    entity_id: input_select.ev_target_type
+                    option: "Range"
+                styles:
+                  card:
+                    - border-radius: 10px
+                    - padding: 8px
+                    - color: white
+                    - background: |
+                        [[[ return states['input_select.ev_target_type'].state==='Range' ? '#2563eb' : '#1f2937'; ]]]
+
+          # Slider sa ukáže len pre zvolený cieľ
+          - type: conditional
+            conditions:
+              - entity: input_select.ev_target_type
+                state: "SOC"
+            card:
+              type: entities
+              entities:
+                - entity: input_number.ev_soc_limit
+                  name: Cieľ SOC
+          - type: conditional
+            conditions:
+              - entity: input_select.ev_target_type
+                state: "Range"
+            card:
+              type: entities
+              entities:
+                - entity: input_number.ev_target_range_km
+                  name: Cieľ dojazd
+
+          # --- Plán nabíjania ---
+          - type: entities
+            title: Plán nabíjania
+            show_header_toggle: false
+            entities:
+              - entity: input_boolean.ev_scheduled_enabled
+                name: Plán zapnutý
+              - entity: sensor.ev_plan_summary
+                name: Súhrn
+              - type: divider
+              - entity: input_select.ev_plan_mode
+                name: Režim
+              - entity: input_number.ev_plan_current
+                name: Nabíjací prúd (A)
+              - entity: input_select.ev_plan_timing
+                name: Časovanie
+              - entity: input_datetime.ev_scheduled_time
+                name: Čas (štart / deadline)
+              - entity: sensor.ev_plan_start_time
+                name: ⏱ Vypočítaný štart
+          # Cieľ — 4 tlačidlá (zelené = zvolené, sivé = vyp)
+          - type: horizontal-stack
+            cards:
+              - type: custom:button-card
+                name: Žiadny
+                tap_action:
+                  action: call-service
+                  service: input_select.select_option
+                  service_data:
+                    entity_id: input_select.ev_plan_target
+                    option: Žiadny
+                styles:
+                  card:
+                    - border-radius: 10px
+                    - padding: 8px
+                    - font-size: 13px
+                    - font-weight: 600
+                    - color: white
+                    - background: |
+                        [[[ return states['input_select.ev_plan_target'].state==='Žiadny' ? '#21BF73' : '#374151'; ]]]
+              - type: custom:button-card
+                name: SOC
+                tap_action:
+                  action: call-service
+                  service: input_select.select_option
+                  service_data:
+                    entity_id: input_select.ev_plan_target
+                    option: SOC
+                styles:
+                  card:
+                    - border-radius: 10px
+                    - padding: 8px
+                    - font-size: 13px
+                    - font-weight: 600
+                    - color: white
+                    - background: |
+                        [[[ return states['input_select.ev_plan_target'].state==='SOC' ? '#21BF73' : '#374151'; ]]]
+              - type: custom:button-card
+                name: Dojazd
+                tap_action:
+                  action: call-service
+                  service: input_select.select_option
+                  service_data:
+                    entity_id: input_select.ev_plan_target
+                    option: Dojazd
+                styles:
+                  card:
+                    - border-radius: 10px
+                    - padding: 8px
+                    - font-size: 13px
+                    - font-weight: 600
+                    - color: white
+                    - background: |
+                        [[[ return states['input_select.ev_plan_target'].state==='Dojazd' ? '#21BF73' : '#374151'; ]]]
+              - type: custom:button-card
+                name: kWh
+                tap_action:
+                  action: call-service
+                  service: input_select.select_option
+                  service_data:
+                    entity_id: input_select.ev_plan_target
+                    option: kWh
+                styles:
+                  card:
+                    - border-radius: 10px
+                    - padding: 8px
+                    - font-size: 13px
+                    - font-weight: 600
+                    - color: white
+                    - background: |
+                        [[[ return states['input_select.ev_plan_target'].state==='kWh' ? '#21BF73' : '#374151'; ]]]
+          # Cieľová hodnota — zobrazí sa hneď pod Cieľom, len pre zvolený cieľ
+          - type: conditional
+            conditions:
+              - entity: input_select.ev_plan_target
+                state: "SOC"
+            card:
+              type: entities
+              entities:
+                - entity: input_number.ev_plan_soc
+                  name: Cieľ SOC %
+          - type: conditional
+            conditions:
+              - entity: input_select.ev_plan_target
+                state: "Dojazd"
+            card:
+              type: entities
+              entities:
+                - entity: input_number.ev_target_range_km
+                  name: Cieľ dojazd km
+          - type: conditional
+            conditions:
+              - entity: input_select.ev_plan_target
+                state: "kWh"
+            card:
+              type: entities
+              entities:
+                - entity: input_number.ev_plan_kwh
+                  name: Dobiť kWh
+          # Opakovať — až za cieľom
+          - type: entities
+            entities:
+              - entity: input_select.ev_plan_repeat
+                name: Opakovať
+
+      # --- Vynechať tarify (#4) ---
+      - type: entities
+        title: Vynechať tarify
+        state_color: true
+        entities:
+          - entity: input_boolean.ev_skip_t1
+            name: Vynechať T1
+          - entity: input_boolean.ev_skip_t2
+            name: Vynechať T2
+          - entity: input_boolean.ev_skip_t3
+            name: Vynechať T3
+          - entity: input_boolean.ev_skip_t4
+            name: Vynechať T4
+
+      # --- Manuál & diagnostika ---
+      - type: entities
+        title: Manuál & diagnostika
+        state_color: true
+        show_header_toggle: false
+        entities:
+          - entity: switch.hacharger_charge_control
+            name: Nabíjať teraz (štart/stop)
+          - entity: input_number.ev_solar_max_current
+            name: Limit prúdu (A)
+          - entity: number.hacharger_maximum_current
+            name: Reálny prúd (A)
+          - entity: sensor.ev_target_current
+            name: Cieľový prúd (režim)
+          - entity: sensor.ev_tariff_allowed
+            name: Tarifa povolená
+          - entity: sensor.ev_target_reached
+            name: Cieľ dosiahnutý
+          - type: divider
+          - entity: switch.hacharger_availability
+            name: Nabíjačka povolená (OCPP)
+          - entity: input_boolean.ev_charging_blocked
+            name: Pauza
+          - entity: input_select.ev_block_reason
+            name: Dôvod pauzy
+          - type: divider
+          - entity: script.ev_restart_charging
+            name: 🔄 Obnova nabíjania (reset+štart)
+            icon: mdi:restart
+          - entity: button.hacharger_reset
+            name: ♻️ Reset nabíjačky (OCPP)
+            icon: mdi:power-cycle
+          - entity: input_boolean.ev_autorecover
+            name: Auto-recovery zaseknutia
+          - entity: binary_sensor.ev_charging_stuck
+            name: Nabíjanie zaseknuté
+
+      # --- Solar parametre ---
+      - type: entities
+        title: Prúd & solar prahy
+        entities:
+          - entity: input_number.ev_solar_min_current
+            name: Min prúd
+          - entity: input_number.ev_solar_max_current
+            name: Max prúd
+          - entity: input_number.ev_solar_pause_threshold_w
+            name: Prah pauzy (Solar)
+          - entity: input_number.ev_solar_resume_threshold_w
+            name: Prah obnovenia (Solar)
+
+      # --- Súhrn ---
+      - type: markdown
+        title: Súhrn
+        content: >
+          ## Celkom {{ states.sensor.ev_sessions_table.attributes.all_count | default(0) }} session
+
+          **Energia:** {{ states.sensor.ev_sessions_table.attributes.all_kwh | default(0) }} kWh
+
+          **Náklady:** {{ states.sensor.ev_sessions_table.attributes.all_cost | default(0) }} €
+
+          ---
+          Vybrané obdobie ({{ state_attr('sensor.ev_sessions_table','label') }}):
+          {{ states.sensor.ev_sessions_table.attributes.head_kwh | default(0) }} kWh /
+          {{ states.sensor.ev_sessions_table.attributes.head_cost | default(0) }} €
+
+      # --- Graf: prebytok vs nabíjanie ---
+      - type: custom:apexcharts-card
+        header:
+          show: true
+          title: Prebytok vs nabíjanie (12h)
+        graph_span: 12h
+        series:
+          - entity: sensor.gw_surplus
+            name: Prebytok
+            stroke_width: 2
+          - entity: sensor.gw_pv_power
+            name: FVE
+            stroke_width: 2
+          - entity: sensor.ev_charging_power
+            name: Nabíjanie
+            transform: "return x * 1000;"
+            stroke_width: 2
+
+  # ==========================================================
+  # POHĽAD 2 — SESSIONS
+  # ==========================================================
+  - title: Sessions
+    path: sessions
+    icon: mdi:history
+    panel: true
+    cards:
+      - type: vertical-stack
+        cards:
+          # --- Prepínač obdobia: Mesiac / Rok / Celkom ---
+          - type: horizontal-stack
+            cards:
+              - type: custom:button-card
+                name: Mesiac
+                tap_action:
+                  action: call-service
+                  service: input_select.select_option
+                  service_data:
+                    entity_id: input_select.ev_stats_period
+                    option: Mesiac
+                styles:
+                  card:
+                    - border-radius: 12px
+                    - padding: 10px
+                    - font-weight: 600
+                    - color: white
+                    - background: |
+                        [[[ return states['input_select.ev_stats_period'].state==='Mesiac' ? '#2563eb' : '#1f2937'; ]]]
+              - type: custom:button-card
+                name: Rok
+                tap_action:
+                  action: call-service
+                  service: input_select.select_option
+                  service_data:
+                    entity_id: input_select.ev_stats_period
+                    option: Rok
+                styles:
+                  card:
+                    - border-radius: 12px
+                    - padding: 10px
+                    - font-weight: 600
+                    - color: white
+                    - background: |
+                        [[[ return states['input_select.ev_stats_period'].state==='Rok' ? '#2563eb' : '#1f2937'; ]]]
+              - type: custom:button-card
+                name: Celkom
+                tap_action:
+                  action: call-service
+                  service: input_select.select_option
+                  service_data:
+                    entity_id: input_select.ev_stats_period
+                    option: Celkom
+                styles:
+                  card:
+                    - border-radius: 12px
+                    - padding: 10px
+                    - font-weight: 600
+                    - color: white
+                    - background: |
+                        [[[ return states['input_select.ev_stats_period'].state==='Celkom' ? '#2563eb' : '#1f2937'; ]]]
+
+          # --- Prepínač metriky: Solar (kWh) / Cena (€) ---
+          - type: horizontal-stack
+            cards:
+              - type: custom:button-card
+                name: ☀️ Solar
+                tap_action:
+                  action: call-service
+                  service: input_select.select_option
+                  service_data:
+                    entity_id: input_select.ev_stats_metric
+                    option: Solar
+                styles:
+                  card:
+                    - border-radius: 12px
+                    - padding: 8px
+                    - font-weight: 600
+                    - color: white
+                    - background: |
+                        [[[ return states['input_select.ev_stats_metric'].state==='Solar' ? '#21BF73' : '#1f2937'; ]]]
+              - type: custom:button-card
+                name: € Cena
+                tap_action:
+                  action: call-service
+                  service: input_select.select_option
+                  service_data:
+                    entity_id: input_select.ev_stats_metric
+                    option: Cena
+                styles:
+                  card:
+                    - border-radius: 12px
+                    - padding: 8px
+                    - font-weight: 600
+                    - color: white
+                    - background: |
+                        [[[ return states['input_select.ev_stats_metric'].state==='Cena' ? '#F5A623' : '#1f2937'; ]]]
+
+          # --- Navigácia obdobia: «  label  » ---
+          - type: horizontal-stack
+            cards:
+              - type: custom:button-card
+                name: "« staršie"
+                tap_action:
+                  action: call-service
+                  service: input_number.increment
+                  service_data:
+                    entity_id: input_number.ev_stats_offset
+                styles:
+                  card: [padding: 10px, border-radius: 12px]
+              - type: markdown
+                content: >
+                  ### {{ state_attr('sensor.ev_sessions_table','label') }}
+
+                  **{{ state_attr('sensor.ev_sessions_table','head_kwh') }} kWh**
+                  · ☀️ {{ state_attr('sensor.ev_sessions_table','head_solar_pct') }} %
+                  · {{ state_attr('sensor.ev_sessions_table','head_cost') }} €
+              - type: custom:button-card
+                name: "novšie »"
+                tap_action:
+                  action: call-service
+                  service: input_number.decrement
+                  service_data:
+                    entity_id: input_number.ev_stats_offset
+                styles:
+                  card: [padding: 10px, border-radius: 12px]
+
+          # --- Stĺpcový graf (button-card HTML): slnko vs sieť ---
+          # apexcharts-card pre stĺpce vnucuje datetime os a nevie kategórie, preto
+          # graf kreslíme cez button-card z period-aware atribútu `chart` ({x,solar,grid}).
+          # Sleduje prepínač Mesiac/Rok/Celkom aj «»/».
+          - type: custom:button-card
+            entity: sensor.ev_sessions_table
+            triggers_update:
+              - input_select.ev_stats_metric
+            show_icon: false
+            show_name: false
+            show_state: false
+            show_label: false
+            tap_action:
+              action: none
+            styles:
+              card:
+                - padding: 14px
+                - border-radius: 12px
+              grid:
+                - grid-template-areas: '"chart"'
+                - grid-template-columns: 1fr
+              custom_fields:
+                chart:
+                  - justify-self: stretch
+            custom_fields:
+              chart: |
+                [[[
+                  const ch = (entity.attributes.chart || []);
+                  const isCost = ((states['input_select.ev_stats_metric']||{}).state) === 'Cena';
+                  if (!ch.length) {
+                    return '<div style="padding:24px;text-align:center;color:var(--secondary-text-color);">Žiadne dáta za toto obdobie</div>';
+                  }
+                  // a = zelená (slnko), b = sivá (sieť); pri Cena = náklad rozdelený podľa slnko/sieť kWh
+                  const vals = ch.map(p => {
+                    const s = Number(p.solar)||0, g = Number(p.grid)||0, c = Number(p.cost)||0, e = s + g;
+                    if (isCost) return { x: p.x, a: e>0 ? c*s/e : 0, b: e>0 ? c*g/e : c };
+                    return { x: p.x, a: s, b: g };
+                  });
+                  let max = 0;
+                  vals.forEach(v => { const t=v.a+v.b; if(t>max) max=t; });
+                  if (max <= 0) max = 1;
+                  const H = 170;
+                  let bars = '';
+                  vals.forEach(v => {
+                    const ah = Math.round(v.a / max * H), bh = Math.round(v.b / max * H);
+                    const tot = v.a + v.b;
+                    let lbl = '';
+                    if (tot >= 0.05) lbl = (tot < 10 ? tot.toFixed(1) : Math.round(tot).toString()) + (isCost ? ' €' : ' kWh');
+                    bars +=
+                      '<div style="flex:1 1 0;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;">' +
+                        '<div style="font-size:11px;line-height:14px;height:14px;white-space:nowrap;color:var(--primary-text-color);">' + lbl + '</div>' +
+                        '<div style="width:78%;background:#6b7280;height:' + bh + 'px;border-radius:2px 2px 0 0;"></div>' +
+                        '<div style="width:78%;background:#21BF73;height:' + ah + 'px;"></div>' +
+                        '<div style="font-size:11px;line-height:14px;margin-top:3px;color:var(--secondary-text-color);white-space:nowrap;">' + v.x + '</div>' +
+                      '</div>';
+                  });
+                  const title = isCost ? 'Náklady (€) — slnko vs sieť' : 'Energia (kWh) — slnko vs sieť';
+                  return '<div style="display:flex;flex-direction:column;gap:6px;">' +
+                      '<div style="display:flex;justify-content:space-between;align-items:baseline;">' +
+                        '<span style="font-weight:600;font-size:15px;">' + title + '</span>' +
+                        '<span style="font-size:13px;color:var(--secondary-text-color);"><span style="color:#21BF73;">&#9632;</span> slnko&nbsp;&nbsp;<span style="color:#6b7280;">&#9632;</span> sieť</span>' +
+                      '</div>' +
+                      '<div style="display:flex;align-items:flex-end;gap:3px;">' + bars + '</div>' +
+                    '</div>';
+                ]]]
+
+          # --- Donut: energia / náklady podľa auta (sleduje metriku) ---
+          - type: custom:button-card
+            entity: sensor.ev_sessions_table
+            triggers_update:
+              - input_select.ev_stats_metric
+            show_icon: false
+            show_name: false
+            show_state: false
+            show_label: false
+            tap_action:
+              action: none
+            styles:
+              card:
+                - padding: 14px
+                - border-radius: 12px
+              grid:
+                - grid-template-areas: '"d"'
+                - grid-template-columns: 1fr
+              custom_fields:
+                d:
+                  - justify-self: stretch
+            custom_fields:
+              d: |
+                [[[
+                  const bv = (entity.attributes.by_vehicle || []);
+                  const isCost = ((states['input_select.ev_stats_metric']||{}).state) === 'Cena';
+                  const vals = bv.map(v => ({ name: v.name, val: isCost ? (Number(v.cost)||0) : (Number(v.energy)||0) }))
+                                 .filter(v => v.val > 0);
+                  const total = vals.reduce((a,v)=>a+v.val, 0);
+                  if (!total) { return '<div style="padding:24px;text-align:center;color:var(--secondary-text-color);">Žiadne dáta</div>'; }
+                  const palette = ['#4F9DF7','#F5A623','#21BF73','#A66CFF','#FF6B6B','#9CA3AF'];
+                  const R=58, SW=18, C=2*Math.PI*R, cx=72, cy=72;
+                  let off=0, segs='';
+                  vals.forEach((v,i) => {
+                    const len = v.val/total*C, col = palette[i%palette.length];
+                    segs += '<circle cx="'+cx+'" cy="'+cy+'" r="'+R+'" fill="none" stroke="'+col+'" stroke-width="'+SW+'" stroke-dasharray="'+len.toFixed(2)+' '+(C-len).toFixed(2)+'" stroke-dashoffset="'+(-off).toFixed(2)+'" transform="rotate(-90 '+cx+' '+cy+')"></circle>';
+                    off += len;
+                  });
+                  const center = isCost ? total.toFixed(2)+' €' : Math.round(total)+' kWh';
+                  const svg = '<svg width="144" height="144" viewBox="0 0 144 144">' + segs +
+                    '<text x="'+cx+'" y="'+(cy+5)+'" text-anchor="middle" fill="var(--primary-text-color)" font-size="15" font-weight="700">'+center+'</text></svg>';
+                  let leg='';
+                  vals.forEach((v,i) => {
+                    const col=palette[i%palette.length], pct=Math.round(v.val/total*100);
+                    const valStr = isCost ? v.val.toFixed(2)+' €' : v.val.toFixed(1)+' kWh';
+                    leg += '<div style="display:flex;align-items:center;gap:8px;margin:6px 0;font-size:14px;">' +
+                      '<span style="width:12px;height:12px;border-radius:3px;background:'+col+';flex:none;"></span>' +
+                      '<span style="flex:1;">'+v.name+'</span>' +
+                      '<span style="font-weight:600;">'+valStr+'</span>' +
+                      '<span style="color:var(--secondary-text-color);width:48px;text-align:right;">'+pct+'%</span>' +
+                      '</div>';
+                  });
+                  const title = isCost ? 'Náklady podľa auta' : 'Energia podľa auta';
+                  return '<div style="display:flex;flex-direction:column;gap:8px;">' +
+                    '<span style="font-weight:600;font-size:15px;">'+title+'</span>' +
+                    '<div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;">' +
+                      '<div style="flex:none;">'+svg+'</div>' +
+                      '<div style="flex:1;min-width:180px;">'+leg+'</div>' +
+                    '</div></div>';
+                ]]]
+
+          # --- Filter tabuľky podľa auta (dynamický dropdown — autá z dát) ---
+          - type: entities
+            show_header_toggle: false
+            entities:
+              - entity: input_select.ev_stats_vehicle
+                name: Filter auta
+                icon: mdi:car-search
+
+          # --- Tabuľka (čistá, totály v headline vyššie) ---
+          - type: custom:flex-table-card
+            sort_by: start-
+            max_rows: 60
+            entities:
+              include: sensor.ev_sessions_table
+            columns:
+              - name: Dátum
+                data: sessions
+                modify: x.date + " " + x.time
+              - name: Auto
+                data: sessions
+                modify: x.user
+              - name: kWh
+                data: sessions
+                modify: x.energy_kwh
+              - name: Slnko %
+                data: sessions
+                modify: x.solar_pct
+              - name: €
+                data: sessions
+                modify: x.cost_eur
+              - name: €/kWh
+                data: sessions
+                modify: x.avg_price
+              - name: Min
+                data: sessions
+                modify: x.charging_min
+              - name: SOC
+                data: sessions
+                modify: "(x.soc_end ? x.soc_start + '→' + x.soc_end + '%' : '–')"
+              - name: km
+                data: sessions
+                modify: "(x.odo_end ? x.odo_end : '–')"
+              - name: Koniec
+                data: sessions
+                modify: x.stop_reason
+            css:
+              table+: "width: 100%; border-collapse: collapse;"
+              th: "text-align: left; color: var(--secondary-text-color); border-bottom: 1px solid var(--divider-color); padding: 6px;"
+              td: "padding: 6px; border-bottom: 1px solid rgba(255,255,255,0.05);"
+              "tbody tr:nth-child(odd)": "background: rgba(255,255,255,0.03);"
+
+          # --- Export: XLSX + CSV ---
+          # POZN.: markdown odkaz na /local/... pohltí HA SPA router (zobrazí default
+          # dashboard). Tlačidlo s action:url otvorí súbor priamo (nový tab) → funguje.
+          # XLSX sa obnovuje po každej session (ev_log_session.sh) + dá sa ručne.
+          - type: horizontal-stack
+            cards:
+              - type: button
+                name: Stiahnuť XLSX
+                icon: mdi:microsoft-excel
+                tap_action:
+                  action: url
+                  url_path: /local/ev_sessions.xlsx
+                hold_action:
+                  action: call-service
+                  service: shell_command.ev_export_xlsx
+              - type: button
+                name: Stiahnuť CSV
+                icon: mdi:file-delimited
+                tap_action:
+                  action: url
+                  url_path: /local/ev_sessions.csv

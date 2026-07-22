@@ -1,5 +1,7 @@
 - alias: Tarifa - Aktualizácia aktuálnej tarify
+  id: 4986e5e97eaa46d78558b634d8e4f1ce
   description: Automaticky aktualizuje select s aktuálnou tarifou
+  mode: single
   trigger:
   - platform: state
     entity_id:
@@ -14,14 +16,14 @@
     target:
       entity_id: input_select.current_tariff
     data:
-      option: "{% if is_state('binary_sensor.t1_aktivna', 'on') %}\n  T1\n{% elif
-        is_state('binary_sensor.t2_aktivna', 'on') %}\n  T2\n{% elif is_state('binary_sensor.t3_aktivna',
-        'on') %}\n  T3\n{% elif is_state('binary_sensor.t4_aktivna', 'on') %}\n  T4\n{%
-        else %}\n  T1\n{% endif %}\n"
-  mode: single
-  id: 4986e5e97eaa46d78558b634d8e4f1ce
+      option: '{% if is_state(''binary_sensor.t1_aktivna'', ''on'') %}T1 {% elif is_state(''binary_sensor.t2_aktivna'',
+        ''on'') %}T2 {% elif is_state(''binary_sensor.t3_aktivna'', ''on'') %}T3 {%
+        elif is_state(''binary_sensor.t4_aktivna'', ''on'') %}T4 {% else %}T1 {% endif
+        %}'
 - alias: Tarifa - Notifikácia o zmene
+  id: c6de83c5bbe64b99be706e78fa050e68
   description: Pošle notifikáciu pri zmene tarify
+  mode: single
   trigger:
   - platform: state
     entity_id: binary_sensor.nt_aktivna
@@ -39,14 +41,14 @@
   - service: persistent_notification.create
     data:
       title: Zmena elektrickej tarify
-      message: "{% if trigger.id == 'nt_start' %}\n  \U0001F7E2 Začala sa NT - vhodný
-        čas na zapnutie energeticky náročných zariadení\n{% else %}\n  \U0001F534
-        Začala sa VT - odporúča sa obmedzenie spotreby\n{% endif %}\n"
+      message: "{% if trigger.id == 'nt_start' %} \U0001F7E2 Začala sa NT - vhodný
+        čas na zapnutie energeticky náročných zariadení {% else %} \U0001F534 Začala
+        sa VT - odporúča sa obmedzenie spotreby {% endif %}"
       notification_id: tariff_change
-  id: c6de83c5bbe64b99be706e78fa050e68
 - id: aquarium_slot1
   alias: Akvárium - Slot 1
   description: Automatizácia pre časový slot 1 - Ranné zapnutie
+  mode: single
   trigger:
   - platform: time
     at: input_datetime.aquarium_slot1_time
@@ -58,16 +60,24 @@
     entity_id: input_boolean.aquarium_slot1_enabled
     state: 'on'
   action:
+  - service: input_boolean.turn_off
+    target:
+      entity_id: input_boolean.aquarium_manual_override
+  - service: persistent_notification.dismiss
+    data:
+      notification_id: aquarium_manual
+  - delay:
+      milliseconds: 500
   - service: script.aquarium_light_control
     data:
       brightness: '{{ states(''input_number.aquarium_slot1_brightness'') | int }}'
       color_temp: '{{ states(''input_number.aquarium_color_temp'') | int }}'
       transition: '{{ states(''input_number.aquarium_slot1_transition'') | int }}'
       slot_name: Slot 1 - Ranné zapnutie
-  mode: single
 - id: aquarium_slot2
   alias: Akvárium - Slot 2
   description: Automatizácia pre časový slot 2 - Poludnie
+  mode: single
   trigger:
   - platform: time
     at: input_datetime.aquarium_slot2_time
@@ -79,16 +89,24 @@
     entity_id: input_boolean.aquarium_slot2_enabled
     state: 'on'
   action:
+  - service: input_boolean.turn_off
+    target:
+      entity_id: input_boolean.aquarium_manual_override
+  - service: persistent_notification.dismiss
+    data:
+      notification_id: aquarium_manual
+  - delay:
+      milliseconds: 500
   - service: script.aquarium_light_control
     data:
       brightness: '{{ states(''input_number.aquarium_slot2_brightness'') | int }}'
       color_temp: '{{ states(''input_number.aquarium_color_temp'') | int }}'
       transition: '{{ states(''input_number.aquarium_slot2_transition'') | int }}'
       slot_name: Slot 2 - Poludnie
-  mode: single
 - id: aquarium_slot3
   alias: Akvárium - Slot 3
   description: Automatizácia pre časový slot 3 - Večer
+  mode: single
   trigger:
   - platform: time
     at: input_datetime.aquarium_slot3_time
@@ -100,16 +118,24 @@
     entity_id: input_boolean.aquarium_slot3_enabled
     state: 'on'
   action:
+  - service: input_boolean.turn_off
+    target:
+      entity_id: input_boolean.aquarium_manual_override
+  - service: persistent_notification.dismiss
+    data:
+      notification_id: aquarium_manual
+  - delay:
+      milliseconds: 500
   - service: script.aquarium_light_control
     data:
       brightness: '{{ states(''input_number.aquarium_slot3_brightness'') | int }}'
       color_temp: '{{ states(''input_number.aquarium_color_temp'') | int }}'
       transition: '{{ states(''input_number.aquarium_slot3_transition'') | int }}'
       slot_name: Slot 3 - Večer
-  mode: single
 - id: aquarium_slot4
   alias: Akvárium - Slot 4
   description: Automatizácia pre časový slot 4 - Noc/Vypnutie
+  mode: single
   trigger:
   - platform: time
     at: input_datetime.aquarium_slot4_time
@@ -121,16 +147,24 @@
     entity_id: input_boolean.aquarium_slot4_enabled
     state: 'on'
   action:
+  - service: input_boolean.turn_off
+    target:
+      entity_id: input_boolean.aquarium_manual_override
+  - service: persistent_notification.dismiss
+    data:
+      notification_id: aquarium_manual
+  - delay:
+      milliseconds: 500
   - service: script.aquarium_light_control
     data:
       brightness: '{{ states(''input_number.aquarium_slot4_brightness'') | int }}'
       color_temp: '{{ states(''input_number.aquarium_color_temp'') | int }}'
       transition: '{{ states(''input_number.aquarium_slot4_transition'') | int }}'
       slot_name: Slot 4 - Noc/Vypnutie
-  mode: single
 - id: aquarium_slot5
   alias: Akvárium - Slot 5
   description: Automatizácia pre časový slot 5
+  mode: single
   trigger:
   - platform: time
     at: input_datetime.aquarium_slot5_time
@@ -142,23 +176,34 @@
     entity_id: input_boolean.aquarium_slot5_enabled
     state: 'on'
   action:
+  - service: input_boolean.turn_off
+    target:
+      entity_id: input_boolean.aquarium_manual_override
+  - service: persistent_notification.dismiss
+    data:
+      notification_id: aquarium_manual
+  - delay:
+      milliseconds: 500
   - service: script.aquarium_light_control
     data:
       brightness: '{{ states(''input_number.aquarium_slot5_brightness'') | int }}'
       color_temp: '{{ states(''input_number.aquarium_color_temp'') | int }}'
       transition: '{{ states(''input_number.aquarium_slot5_transition'') | int }}'
       slot_name: Slot 5
-  mode: single
 - id: aquarium_manual_override_detection
   alias: Akvárium - Detekcia manuálneho zásahu
-  description: Aktivuje manual override pri zmene svetla mimo automatizácie
+  description: Aktivuje manual override LEN ak zmenu vykonal používateľ (nie automatizácia).
+    Používa context.user_id - ak je None, zmenu vyvolala automatizácia/script.
+  mode: single
   trigger:
   - platform: state
     entity_id: light.led_ccww_controller
-    attribute: brightness
+    from: 'off'
+    to: 'on'
   - platform: state
     entity_id: light.led_ccww_controller
-    attribute: color_temp
+    from: 'on'
+    to: 'off'
   condition:
   - condition: state
     entity_id: input_boolean.aquarium_automation
@@ -167,10 +212,7 @@
     entity_id: input_boolean.aquarium_manual_override
     state: 'off'
   - condition: template
-    value_template: '{% set last_changed = as_timestamp(states.light.led_ccww_controller.last_changed)
-      %} {% set now_ts = as_timestamp(now()) %} {{ (now_ts - last_changed) > 5 }}
-
-      '
+    value_template: '{{ trigger.to_state.context.user_id is not none }}'
   action:
   - service: input_boolean.turn_on
     target:
@@ -191,12 +233,16 @@
     data:
       title: Akvárium
       message: "\U0001F7E1 Detekovaný manuálny zásah - automatizácia pozastavená do
-        nasledujúceho časového slotu"
+        nasledujúceho časového slotu."
       notification_id: aquarium_manual
-  mode: single
+  - service: logbook.log
+    data:
+      name: Akvárium
+      message: "\U0001F7E1 Manual override aktivovaný (zmenu spustil používateľ)"
 - id: aquarium_auto_resume
   alias: Akvárium - Automatické obnovenie automatizácie
-  description: Obnoví automatizáciu pri nasledujúcom časovom slote
+  description: Poistka - obnoví automatizáciu pri nasledujúcom časovom slote
+  mode: single
   trigger:
   - platform: time
     at: input_datetime.aquarium_slot1_time
@@ -223,24 +269,60 @@
     data:
       name: Akvárium
       message: "\U0001F535 Automatizácia obnovená - spúšťa sa časový slot"
-  mode: single
 - id: aquarium_restore_after_restart
-  alias: Akvárium - Obnova po reštarte
-  description: Obnoví posledný stav svetla po reštarte HA
+  alias: Akvárium - Catch-up po reštarte
+  description: Po reštarte HA zistí podľa aktuálneho času ktorý slot mal bežať a nastaví
+    svetlo správne - aj keď bol pri reštarte vypnutý.
+  mode: single
   trigger:
   - platform: homeassistant
     event: start
   condition:
   - condition: state
-    entity_id: light.led_ccww_controller
+    entity_id: input_boolean.aquarium_automation
     state: 'on'
+  - condition: state
+    entity_id: input_boolean.aquarium_manual_override
+    state: 'off'
   action:
   - delay:
-      seconds: 30
-  - service: script.aquarium_restore_state
-  mode: single
+      seconds: 60
+  - variables:
+      t: '{{ now().strftime(''%H:%M:%S'') }}'
+      s1: '{{ states(''input_datetime.aquarium_slot1_time'') }}'
+      s2: '{{ states(''input_datetime.aquarium_slot2_time'') }}'
+      s3: '{{ states(''input_datetime.aquarium_slot3_time'') }}'
+      s4: '{{ states(''input_datetime.aquarium_slot4_time'') }}'
+      s5: '{{ states(''input_datetime.aquarium_slot5_time'') }}'
+      e1: '{{ is_state(''input_boolean.aquarium_slot1_enabled'', ''on'') }}'
+      e2: '{{ is_state(''input_boolean.aquarium_slot2_enabled'', ''on'') }}'
+      e3: '{{ is_state(''input_boolean.aquarium_slot3_enabled'', ''on'') }}'
+      e4: '{{ is_state(''input_boolean.aquarium_slot4_enabled'', ''on'') }}'
+      e5: '{{ is_state(''input_boolean.aquarium_slot5_enabled'', ''on'') }}'
+      active_brightness: '{% set t = now().strftime(''%H:%M:%S'') %} {% set s1 = states(''input_datetime.aquarium_slot1_time'')
+        %} {% set s2 = states(''input_datetime.aquarium_slot2_time'') %} {% set s3
+        = states(''input_datetime.aquarium_slot3_time'') %} {% set s4 = states(''input_datetime.aquarium_slot4_time'')
+        %} {% set s5 = states(''input_datetime.aquarium_slot5_time'') %} {% if t >=
+        s5 and is_state(''input_boolean.aquarium_slot5_enabled'',''on'') %}0 {% elif
+        t >= s4 and is_state(''input_boolean.aquarium_slot4_enabled'',''on'') %}{{
+        states(''input_number.aquarium_slot4_brightness'') | int }} {% elif t >= s3
+        and is_state(''input_boolean.aquarium_slot3_enabled'',''on'') %}{{ states(''input_number.aquarium_slot3_brightness'')
+        | int }} {% elif t >= s2 and is_state(''input_boolean.aquarium_slot2_enabled'',''on'')
+        %}{{ states(''input_number.aquarium_slot2_brightness'') | int }} {% elif t
+        >= s1 and is_state(''input_boolean.aquarium_slot1_enabled'',''on'') %}{{ states(''input_number.aquarium_slot1_brightness'')
+        | int }} {% else %}0 {% endif %}
+
+        '
+  - service: script.aquarium_light_control
+    data:
+      brightness: '{{ active_brightness | int }}'
+      color_temp: '{{ states(''input_number.aquarium_color_temp'') | int }}'
+      transition: 5
+      slot_name: Catch-up po reštarte ({{ now().strftime('%H:%M') }})
 - alias: Dražice - Nastavenie režimu
+  id: c17f02a921464407946209c63afbc7ef
   description: Automaticky nastaví režim a teplotu termostatu podľa podmienok
+  mode: restart
   trigger:
   - platform: time_pattern
     minutes: /5
@@ -295,27 +377,26 @@
     target:
       entity_id: input_select.bojler_drazice_start_reason
     data:
-      option: "{% if is_state('binary_sensor.drazice_forced_needed', 'on') %}\n  forced\n{%
-        elif states('sensor.active_power') | float(0) > states('input_number.bojler_drazice_surplus_threshold_boost')
-        | float(2500) %}\n  surplus\n{% elif is_state('binary_sensor.t1_aktivna',
-        'on') %}\n  t1\n{% elif is_state('binary_sensor.t2_aktivna', 'on') %}\n  t2\n{%
-        elif is_state('binary_sensor.t3_aktivna', 'on') %}\n  t3\n{% else %}\n  forced\n{%
-        endif %}\n"
+      option: '{% if is_state(''binary_sensor.drazice_forced_needed'', ''on'') %}forced
+        {% elif states(''sensor.active_power'') | float(0) > states(''input_number.bojler_drazice_surplus_threshold_boost'')
+        | float(2500) %}surplus {% elif is_state(''binary_sensor.t1_aktivna'', ''on'')
+        %}t1 {% elif is_state(''binary_sensor.t2_aktivna'', ''on'') %}t2 {% elif is_state(''binary_sensor.t3_aktivna'',
+        ''on'') %}t3 {% else %}forced {% endif %}'
   - service: logbook.log
     data:
       name: Dražice Termostat
       message: "\U0001F504 Režim zmenený: {{ current_mode }} → {{ recommended_mode
         }} \U0001F321️ Cieľová teplota: {{ target_temp }}°C \U0001F4CA {{ state_attr('sensor.drazice_odporucany_rezim',
-        'reason') }}\n"
+        'reason') }}"
   - service: input_datetime.set_datetime
     target:
       entity_id: input_datetime.bojler_drazice_start_time
     data:
       timestamp: '{{ now().timestamp() }}'
-  mode: restart
-  id: c17f02a921464407946209c63afbc7ef
 - alias: Dražice - Vynútený ohrev
+  id: 7d8e68fa529b4800b0aaefdcbbdfa4aa
   description: Zapne ohrev ak teplota klesne pod minimum
+  mode: single
   trigger:
   - platform: numeric_state
     entity_id: climate.drazitherm
@@ -342,20 +423,18 @@
   - service: persistent_notification.create
     data:
       title: ⚠️ Dražice - Vynútený režim
-      message: 'Teplota bojlera klesla pod {{ states(''input_number.bojler_drazice_temp_forced'')
+      message: Teplota bojlera klesla pod {{ states('input_number.bojler_drazice_temp_forced')
         }}°C. Zapnutý vynútený ohrev.
-
-        '
       notification_id: drazice_forced
   - service: logbook.log
     data:
       name: Dražice Termostat
       message: "\U0001F6A8 VYNÚTENÝ REŽIM: Teplota {{ state_attr('climate.drazitherm',
         'current_temperature') }}°C - zapnutý ohrev"
-  mode: single
-  id: 7d8e68fa529b4800b0aaefdcbbdfa4aa
 - alias: Dražice - Vypnutie vynúteného režimu
+  id: 255c342427664ed68cb47282b981758c
   description: Vypne vynútený režim keď je teplota dostatočná
+  mode: single
   trigger:
   - platform: numeric_state
     entity_id: climate.drazitherm
@@ -379,15 +458,15 @@
       name: Dražice Termostat
       message: '✅ Vynútený režim ukončený - teplota: {{ state_attr(''climate.drazitherm'',
         ''current_temperature'') }}°C'
-  mode: single
-  id: 255c342427664ed68cb47282b981758c
 - alias: Ariston - Flexibilné zapnutie
+  id: ariston_flexible_on
   description: Zapína Ariston len ak je Dražice zohriaty alebo sú veľké prebytky
+  mode: single
   trigger:
   - platform: template
-    value_template: '{{ is_state(''input_boolean.bojler_ariston_enable_surplus'',
-      ''on'') and states(''sensor.active_power'') | float(0) > states(''input_number.bojler_ariston_surplus_threshold_on'')
-      | float(2000) }}'
+    value_template: "{{ is_state('input_boolean.bojler_ariston_enable_surplus', 'on')\n
+      \  and states('sensor.active_power') | float(0)\n       > states('input_number.bojler_ariston_surplus_threshold_on')
+      | float(2000) }}"
     id: surplus_enabled
   - platform: state
     entity_id: binary_sensor.t1_aktivna
@@ -401,6 +480,10 @@
     entity_id: binary_sensor.t3_aktivna
     to: 'on'
     id: t3_start
+  - platform: state
+    entity_id: binary_sensor.t4_aktivna
+    to: 'on'
+    id: t4_start
   condition:
   - condition: state
     entity_id: switch.pw_bojler_immax
@@ -419,16 +502,16 @@
         entity_id: input_boolean.bojler_ariston_enable_surplus
         state: 'on'
       - condition: template
-        value_template: '{{ states(''sensor.active_power'') | float(0) > states(''input_number.bojler_ariston_surplus_threshold_on'')
-          | float(2000) }}'
+        value_template: "{{ states('sensor.active_power') | float(0)\n   > states('input_number.bojler_ariston_surplus_threshold_on')
+          | float(2000) }}"
     - condition: and
       conditions:
       - condition: state
         entity_id: input_boolean.bojler_ariston_enable_surplus
         state: 'on'
       - condition: template
-        value_template: '{{ states(''sensor.active_power'') | float(0) > states(''input_number.combined_surplus_threshold'')
-          | float(3600) }}'
+        value_template: "{{ states('sensor.active_power') | float(0)\n   > states('input_number.combined_surplus_threshold')
+          | float(3600) }}"
     - condition: and
       conditions:
       - condition: state
@@ -459,6 +542,17 @@
       - condition: state
         entity_id: binary_sensor.drazice_zohriaty
         state: 'on'
+    - condition: and
+      conditions:
+      - condition: state
+        entity_id: input_boolean.bojler_ariston_enable_t4
+        state: 'on'
+      - condition: state
+        entity_id: binary_sensor.t4_aktivna
+        state: 'on'
+      - condition: state
+        entity_id: binary_sensor.drazice_zohriaty
+        state: 'on'
   action:
   - service: switch.turn_on
     target:
@@ -472,32 +566,31 @@
     target:
       entity_id: input_select.bojler_ariston_start_reason
     data:
-      option: "{% set surplus = states('sensor.active_power') | float(0) %} {% set
-        drazice_ready = is_state('binary_sensor.drazice_zohriaty', 'on') %} {% set
-        combined_threshold = states('input_number.combined_surplus_threshold') | float(3600)
-        %}\n{% if surplus > combined_threshold %}\n  surplus\n{% elif drazice_ready
-        and surplus > states('input_number.bojler_ariston_surplus_threshold_on') |
-        float(2000) %}\n  drazice_ready\n{% elif is_state('binary_sensor.t1_aktivna',
-        'on') %}\n  t1\n{% elif is_state('binary_sensor.t2_aktivna', 'on') %}\n  t2\n{%
-        elif is_state('binary_sensor.t3_aktivna', 'on') %}\n  t3\n{% else %}\n  none\n{%
-        endif %}\n"
+      option: '{% set surplus = states(''sensor.active_power'') | float(0) %} {% set
+        drazice_ready = is_state(''binary_sensor.drazice_zohriaty'', ''on'') %} {%
+        set combined_threshold = states(''input_number.combined_surplus_threshold'')
+        | float(3600) %} {% if surplus > combined_threshold %}surplus {% elif drazice_ready
+        and surplus > states(''input_number.bojler_ariston_surplus_threshold_on'')
+        | float(2000) %}drazice_ready {% elif is_state(''binary_sensor.t1_aktivna'',
+        ''on'') %}t1 {% elif is_state(''binary_sensor.t2_aktivna'', ''on'') %}t2 {%
+        elif is_state(''binary_sensor.t3_aktivna'', ''on'') %}t3 {% elif is_state(''binary_sensor.t4_aktivna'',
+        ''on'') %}t4 {% else %}none {% endif %}'
   - service: logbook.log
     data:
       name: Ariston Bojler
-      message: "\U0001F7E2 Ariston zapnutý:  {% set surplus = states('sensor.active_power')
-        | float(0) %} {% set drazice_ready = is_state('binary_sensor.drazice_zohriaty',
-        'on') %} {% set reason = states('input_select.bojler_ariston_start_reason')
-        %}\n{% if reason == 'surplus' %}\n  Veľké prebytky ({{ surplus }}W) - oba
-        bojlery súčasne\n{% elif reason == 'drazice_ready' %}\n  Dražice zohriaty
-        + prebytky ({{ surplus }}W)\n{% elif reason == 't1' %}\n  T1 tarifa aktívna\n{%
-        elif reason == 't2' %}\n  T2 tarifa + Dražice zohriaty\n{% elif reason ==
-        't3' %}\n  T3 tarifa + Dražice zohriaty\n{% else %}\n  Neznámy dôvod\n{% endif
-        %}\n"
-  id: ariston_flexible_on
-  mode: single
+      message: "\U0001F7E2 Ariston zapnutý: {% set surplus = states('sensor.active_power')
+        | float(0) %} {% set reason = states('input_select.bojler_ariston_start_reason')
+        %} {% if reason == 'surplus' %}Veľké prebytky ({{ surplus }}W) - oba bojlery
+        súčasne {% elif reason == 'drazice_ready' %}Dražice zohriaty + prebytky ({{
+        surplus }}W) {% elif reason == 't1' %}T1 tarifa aktívna {% elif reason ==
+        't2' %}T2 tarifa + Dražice zohriaty {% elif reason == 't3' %}T3 tarifa + Dražice
+        zohriaty {% elif reason == 't4' %}T4 tarifa + Dražice zohriaty {% else %}Neznámy
+        dôvod {% endif %}"
 - alias: Ariston - Flexibilné vypnutie
+  id: ariston_flexible_off
   description: Vypína Ariston - pri prebytkoch po min.čase, pri tarife až keď príde
     zakázaná tarifa
+  mode: single
   trigger:
   - platform: state
     entity_id:
@@ -508,8 +601,8 @@
     to: 'on'
     id: tariff_change
   - platform: template
-    value_template: '{{ states(''sensor.active_power'') | float(0) < states(''input_number.bojler_ariston_surplus_threshold_off'')
-      | float(500) }}'
+    value_template: "{{ states('sensor.active_power') | float(0)\n   < states('input_number.bojler_ariston_surplus_threshold_off')
+      | float(500) }}"
     for:
       minutes: 2
     id: surplus_low
@@ -535,31 +628,32 @@
     - condition: and
       conditions:
       - condition: template
-        value_template: '{{ states(''input_select.bojler_ariston_start_reason'') in
-          [''surplus'', ''drazice_ready''] }}'
+        value_template: "{{ states('input_select.bojler_ariston_start_reason')\n   in
+          ['surplus', 'drazice_ready'] }}"
       - condition: template
-        value_template: '{{ states(''sensor.active_power'') | float(0) < states(''input_number.bojler_ariston_surplus_threshold_off'')
-          | float(500) }}'
+        value_template: "{{ states('sensor.active_power') | float(0)\n   < states('input_number.bojler_ariston_surplus_threshold_off')
+          | float(500) }}"
       - condition: template
         value_template: '{% set start = states(''input_datetime.bojler_ariston_start_time'')
           | as_timestamp %} {% set mins = (now().timestamp() - start) / 60 %} {{ mins
-          >= states(''input_number.bojler_ariston_min_time'') | float(15) }}
-
-          '
+          >= states(''input_number.bojler_ariston_min_time'') | float(15) }}'
     - condition: and
       conditions:
       - condition: template
-        value_template: '{{ states(''input_select.bojler_ariston_start_reason'') in
-          [''t1'', ''t2'', ''t3'', ''t4''] }}'
+        value_template: "{{ states('input_select.bojler_ariston_start_reason')\n   in
+          ['t1', 't2', 't3', 't4'] }}"
       - condition: template
-        value_template: "{% set t1_ok = is_state('binary_sensor.t1_aktivna', 'on')
-          and is_state('input_boolean.bojler_ariston_enable_t1', 'on') %} {% set t2_ok
-          = is_state('binary_sensor.t2_aktivna', 'on') and is_state('input_boolean.bojler_ariston_enable_t2',
-          'on') %} {% set t3_ok = is_state('binary_sensor.t3_aktivna', 'on') and is_state('input_boolean.bojler_ariston_enable_t3',
-          'on') %} {% set surplus_ok = is_state('input_boolean.bojler_ariston_enable_surplus',
-          'on') and\\n                    states('sensor.active_power') | float(0)
-          > states('input_number.bojler_ariston_surplus_threshold_on') | float(2000)
-          %}\\n{{ not (t1_ok or t2_ok or t3_ok or surplus_ok) }}\\n"
+        value_template: "{% set t1_ok = is_state('binary_sensor.t1_aktivna', 'on')\n
+          \              and is_state('input_boolean.bojler_ariston_enable_t1', 'on')
+          %}\n{% set t2_ok = is_state('binary_sensor.t2_aktivna', 'on')\n               and
+          is_state('input_boolean.bojler_ariston_enable_t2', 'on') %}\n{% set t3_ok
+          = is_state('binary_sensor.t3_aktivna', 'on')\n               and is_state('input_boolean.bojler_ariston_enable_t3',
+          'on') %}\n{% set t4_ok = is_state('binary_sensor.t4_aktivna', 'on')\n               and
+          is_state('input_boolean.bojler_ariston_enable_t4', 'on') %}\n{% set surplus_ok
+          = is_state('input_boolean.bojler_ariston_enable_surplus', 'on')\n                     and
+          states('sensor.active_power') | float(0)\n                         > states('input_number.bojler_ariston_surplus_threshold_on')
+          | float(2000) %}\n{{ not (t1_ok or t2_ok or t3_ok or t4_ok or surplus_ok)
+          }}"
   action:
   - service: switch.turn_off
     target:
@@ -575,11 +669,11 @@
       message: "\U0001F534 Ariston vypnutý: {% set start_time = states('input_datetime.bojler_ariston_start_time')
         | as_timestamp %} {% set current_time = now().timestamp() %} {% set running_minutes
         = ((current_time - start_time) / 60) | round(1) %} {% set power = states('sensor.active_power')
-        | float(0) %} Bežal {{ running_minutes }} min, aktuálny výkon: {{ power }}W\n"
-  id: ariston_flexible_off
-  mode: single
+        | float(0) %} Bežal {{ running_minutes }} min, aktuálny výkon: {{ power }}W"
 - alias: Ariston - Reset pri manuálnom vypnutí
+  id: ariston_manual_reset
   description: Resetuje helpers pri manuálnom vypnutí Ariston bojlera
+  mode: single
   trigger:
   - platform: state
     entity_id: switch.pw_bojler_immax
@@ -598,11 +692,11 @@
     data:
       name: Ariston Bojler
       message: "\U0001F527 Ariston vypnutý manuálne - reset automatiky"
-  id: ariston_manual_reset
-  mode: single
 - alias: Ariston - Detekcia manuálneho zapnutia
+  id: ariston_manual_on_detection
   description: Nastaví špeciálny stav pri manuálnom zapnutí Ariston bojlera (ignoruje
     reštart HA)
+  mode: single
   trigger:
   - platform: state
     entity_id: switch.pw_bojler_immax
@@ -628,11 +722,10 @@
     data:
       name: Ariston Bojler
       message: "\U0001F7E1 Ariston zapnutý MANUÁLNE - automatika nebude zasahovať"
-  id: ariston_manual_on_detection
-  mode: single
 - alias: Klíma - Vypnutie pri zakázanej tarife
   id: klima_tariff_shutoff
   description: Vypne klimatizáciu pri vstupe do tarify, kde nie je povolená
+  mode: single
   trigger:
   - platform: state
     entity_id:
@@ -657,16 +750,15 @@
     entity_id: switch.klima_cojirbfaaai_power_switch
     state: 'on'
   - condition: template
-    value_template: "{% set t1_active = is_state('binary_sensor.t1_aktivna', 'on')\
-      \ %} {% set t2_active = is_state('binary_sensor.t2_aktivna', 'on') %} {% set\
-      \ t3_active = is_state('binary_sensor.t3_aktivna', 'on') %} {% set t4_active\
-      \ = is_state('binary_sensor.t4_aktivna', 'on') %} {% set t1_allowed = is_state('input_boolean.klima_enable_t1',\
-      \ 'on') %} {% set t2_allowed = is_state('input_boolean.klima_enable_t2', 'on')\
-      \ %} {% set t3_allowed = is_state('input_boolean.klima_enable_t3', 'on') %}\
-      \ {% set t4_allowed = is_state('input_boolean.klima_enable_t4', 'on') %} {{\
-      \ (t1_active and not t1_allowed) or \\n   (t2_active and not t2_allowed) or\
-      \ \\n   (t3_active and not t3_allowed) or \\n   (t4_active and not t4_allowed)\
-      \ }}\\n"
+    value_template: "{% set t1_active = is_state('binary_sensor.t1_aktivna', 'on')
+      %} {% set t2_active = is_state('binary_sensor.t2_aktivna', 'on') %} {% set t3_active
+      = is_state('binary_sensor.t3_aktivna', 'on') %} {% set t4_active = is_state('binary_sensor.t4_aktivna',
+      'on') %} {% set t1_allowed = is_state('input_boolean.klima_enable_t1', 'on')
+      %} {% set t2_allowed = is_state('input_boolean.klima_enable_t2', 'on') %} {%
+      set t3_allowed = is_state('input_boolean.klima_enable_t3', 'on') %} {% set t4_allowed
+      = is_state('input_boolean.klima_enable_t4', 'on') %} {{ (t1_active and not t1_allowed)\n
+      \  or (t2_active and not t2_allowed)\n   or (t3_active and not t3_allowed)\n
+      \  or (t4_active and not t4_allowed) }}"
   action:
   - service: input_boolean.turn_on
     target:
@@ -677,20 +769,17 @@
   - service: persistent_notification.create
     data:
       title: "\U0001F534 Klimatizácia vypnutá"
-      message: 'Klíma vypnutá - tarifa {{ states(''sensor.aktualna_tarifa'') }} ({{
-        states(''sensor.aktualna_cena_kwh'') }} EUR/kWh). Automaticky sa zapne po
-        skončení tejto tarify.
-
-        '
+      message: Klíma vypnutá - tarifa {{ states('sensor.aktualna_tarifa') }} ({{ states('sensor.aktualna_cena_kwh')
+        }} EUR/kWh). Automaticky sa zapne po skončení tejto tarify.
       notification_id: klima_tariff_shutoff
   - service: logbook.log
     data:
       name: Klíma Automatizácia
       message: "\U0001F534 Klíma VYPNUTÁ - {{ states('sensor.aktualna_tarifa') }}"
-  mode: single
 - alias: Klíma - Zapnutie pri povolenej tarife
   id: klima_tariff_restore
   description: Zapne klimatizáciu po prechode do povolenej tarify
+  mode: single
   trigger:
   - platform: state
     entity_id:
@@ -716,15 +805,15 @@
     entity_id: switch.klima_cojirbfaaai_power_switch
     state: 'off'
   - condition: template
-    value_template: "{% set t1_active = is_state('binary_sensor.t1_aktivna', 'on')\
-      \ %} {% set t2_active = is_state('binary_sensor.t2_aktivna', 'on') %} {% set\
-      \ t3_active = is_state('binary_sensor.t3_aktivna', 'on') %} {% set t4_active\
-      \ = is_state('binary_sensor.t4_aktivna', 'on') %} {% set t1_allowed = is_state('input_boolean.klima_enable_t1',\
-      \ 'on') %} {% set t2_allowed = is_state('input_boolean.klima_enable_t2', 'on')\
-      \ %} {% set t3_allowed = is_state('input_boolean.klima_enable_t3', 'on') %}\
-      \ {% set t4_allowed = is_state('input_boolean.klima_enable_t4', 'on') %} {{\
-      \ (t1_active and t1_allowed) or \\n   (t2_active and t2_allowed) or \\n   (t3_active\
-      \ and t3_allowed) or \\n   (t4_active and t4_allowed) }}\\n"
+    value_template: "{% set t1_active = is_state('binary_sensor.t1_aktivna', 'on')
+      %} {% set t2_active = is_state('binary_sensor.t2_aktivna', 'on') %} {% set t3_active
+      = is_state('binary_sensor.t3_aktivna', 'on') %} {% set t4_active = is_state('binary_sensor.t4_aktivna',
+      'on') %} {% set t1_allowed = is_state('input_boolean.klima_enable_t1', 'on')
+      %} {% set t2_allowed = is_state('input_boolean.klima_enable_t2', 'on') %} {%
+      set t3_allowed = is_state('input_boolean.klima_enable_t3', 'on') %} {% set t4_allowed
+      = is_state('input_boolean.klima_enable_t4', 'on') %} {{ (t1_active and t1_allowed)\n
+      \  or (t2_active and t2_allowed)\n   or (t3_active and t3_allowed)\n   or (t4_active
+      and t4_allowed) }}"
   action:
   - service: switch.turn_on
     target:
@@ -739,10 +828,10 @@
     data:
       name: Klíma Automatizácia
       message: "\U0001F7E2 Klíma ZAPNUTÁ - {{ states('sensor.aktualna_tarifa') }}"
-  mode: single
 - alias: Klíma - Reset pri manuálnom vypnutí
   id: klima_manual_off_reset
   description: Resetuje pamäť ak používateľ manuálne vypne klímu
+  mode: single
   trigger:
   - platform: state
     entity_id: switch.klima_cojirbfaaai_power_switch
@@ -754,17 +843,16 @@
     entity_id: input_boolean.klima_was_on_before_shutoff
     state: 'on'
   - condition: template
-    value_template: "{% set t1_active = is_state('binary_sensor.t1_aktivna', 'on')\
-      \ %} {% set t2_active = is_state('binary_sensor.t2_aktivna', 'on') %} {% set\
-      \ t3_active = is_state('binary_sensor.t3_aktivna', 'on') %} {% set t4_active\
-      \ = is_state('binary_sensor.t4_aktivna', 'on') %} {% set t1_allowed = is_state('input_boolean.klima_enable_t1',\
-      \ 'on') %} {% set t2_allowed = is_state('input_boolean.klima_enable_t2', 'on')\
-      \ %} {% set t3_allowed = is_state('input_boolean.klima_enable_t3', 'on') %}\
-      \ {% set t4_allowed = is_state('input_boolean.klima_enable_t4', 'on') %} {%\
-      \ set forbidden = (t1_active and not t1_allowed) or \\n                   (t2_active\
-      \ and not t2_allowed) or \\n                   (t3_active and not t3_allowed)\
-      \ or \\n                   (t4_active and not t4_allowed) %}\\n{{ not forbidden\
-      \ }}\\n"
+    value_template: "{% set t1_active = is_state('binary_sensor.t1_aktivna', 'on')
+      %} {% set t2_active = is_state('binary_sensor.t2_aktivna', 'on') %} {% set t3_active
+      = is_state('binary_sensor.t3_aktivna', 'on') %} {% set t4_active = is_state('binary_sensor.t4_aktivna',
+      'on') %} {% set t1_allowed = is_state('input_boolean.klima_enable_t1', 'on')
+      %} {% set t2_allowed = is_state('input_boolean.klima_enable_t2', 'on') %} {%
+      set t3_allowed = is_state('input_boolean.klima_enable_t3', 'on') %} {% set t4_allowed
+      = is_state('input_boolean.klima_enable_t4', 'on') %} {% set forbidden = (t1_active
+      and not t1_allowed)\n                   or (t2_active and not t2_allowed)\n
+      \                  or (t3_active and not t3_allowed)\n                   or
+      (t4_active and not t4_allowed) %}\n{{ not forbidden }}"
   action:
   - service: input_boolean.turn_off
     target:
@@ -773,10 +861,10 @@
     data:
       name: Klíma Automatizácia
       message: "\U0001F527 Pamäť resetovaná - klíma nebude automaticky zapnutá"
-  mode: single
 - alias: Klíma - Detekcia manuálneho override
   id: klima_manual_override_detection
   description: Aktivuje manuálny režim ak používateľ zapne klímu počas zakázanej tarify
+  mode: single
   trigger:
   - platform: state
     entity_id: switch.klima_cojirbfaaai_power_switch
@@ -789,16 +877,15 @@
     entity_id: input_boolean.klima_manual_override
     state: 'off'
   - condition: template
-    value_template: "{% set t1_active = is_state('binary_sensor.t1_aktivna', 'on')\
-      \ %} {% set t2_active = is_state('binary_sensor.t2_aktivna', 'on') %} {% set\
-      \ t3_active = is_state('binary_sensor.t3_aktivna', 'on') %} {% set t4_active\
-      \ = is_state('binary_sensor.t4_aktivna', 'on') %} {% set t1_allowed = is_state('input_boolean.klima_enable_t1',\
-      \ 'on') %} {% set t2_allowed = is_state('input_boolean.klima_enable_t2', 'on')\
-      \ %} {% set t3_allowed = is_state('input_boolean.klima_enable_t3', 'on') %}\
-      \ {% set t4_allowed = is_state('input_boolean.klima_enable_t4', 'on') %} {{\
-      \ (t1_active and not t1_allowed) or \\n   (t2_active and not t2_allowed) or\
-      \ \\n   (t3_active and not t3_allowed) or \\n   (t4_active and not t4_allowed)\
-      \ }}\\n"
+    value_template: "{% set t1_active = is_state('binary_sensor.t1_aktivna', 'on')
+      %} {% set t2_active = is_state('binary_sensor.t2_aktivna', 'on') %} {% set t3_active
+      = is_state('binary_sensor.t3_aktivna', 'on') %} {% set t4_active = is_state('binary_sensor.t4_aktivna',
+      'on') %} {% set t1_allowed = is_state('input_boolean.klima_enable_t1', 'on')
+      %} {% set t2_allowed = is_state('input_boolean.klima_enable_t2', 'on') %} {%
+      set t3_allowed = is_state('input_boolean.klima_enable_t3', 'on') %} {% set t4_allowed
+      = is_state('input_boolean.klima_enable_t4', 'on') %} {{ (t1_active and not t1_allowed)\n
+      \  or (t2_active and not t2_allowed)\n   or (t3_active and not t3_allowed)\n
+      \  or (t4_active and not t4_allowed) }}"
   action:
   - service: input_boolean.turn_on
     target:
@@ -806,19 +893,17 @@
   - service: persistent_notification.create
     data:
       title: "\U0001F7E1 Klíma - Manuálny režim"
-      message: 'Klíma manuálne zapnutá počas {{ states(''sensor.aktualna_tarifa'')
-        }}. Automatizácia pozastavená. Vypnite "Manuálny režim" pre obnovenie.
-
-        '
+      message: Klíma manuálne zapnutá počas {{ states('sensor.aktualna_tarifa') }}.
+        Automatizácia pozastavená. Vypnite "Manuálny režim" pre obnovenie.
       notification_id: klima_manual_override
   - service: logbook.log
     data:
       name: Klíma Automatizácia
       message: "\U0001F7E1 MANUÁLNY OVERRIDE aktivovaný"
-  mode: single
 - alias: Klíma - Auto-reset manuálneho override
   id: klima_manual_override_auto_reset
   description: Automaticky resetuje manuálny override o polnoci
+  mode: single
   trigger:
   - platform: time
     at: 00:00:00
@@ -837,10 +922,41 @@
     data:
       name: Klíma Automatizácia
       message: "\U0001F504 Manuálny override automaticky resetovaný (polnoc)"
+- alias: Ariston - Auto-reset manuálneho režimu
+  id: ariston_manual_auto_reset
+  description: O polnoci vypne bojler ak je v manuálnom režime - zabraňuje trvalému
+    ON. Bojler sa môže znovu zapnúť automaticky ak podmienky (tarifa/prebytky) sú
+    splnené.
   mode: single
+  trigger:
+  - platform: time
+    at: 00:00:00
+  condition:
+  - condition: state
+    entity_id: input_select.bojler_ariston_start_reason
+    state: manual
+  - condition: state
+    entity_id: switch.pw_bojler_immax
+    state: 'on'
+  action:
+  - service: switch.turn_off
+    target:
+      entity_id: switch.pw_bojler_immax
+  - service: logbook.log
+    data:
+      name: Ariston Bojler
+      message: "\U0001F504 Manuálny režim automaticky resetovaný (polnoc) - bojler
+        vypnutý"
+  - service: persistent_notification.create
+    data:
+      title: Ariston - Reset manuálneho režimu
+      message: Bojler bol v manuálnom režime a bol automaticky vypnutý o polnoci.
+        Znovu sa zapne ak budú splnené podmienky (tarifa/prebytky FVE).
+      notification_id: ariston_manual_reset_midnight
 - id: '1768684818742'
   alias: Vypnut Kriky 22:00
   description: ''
+  mode: single
   triggers:
   - trigger: time
     at: '22:00:00'
@@ -850,10 +966,9 @@
     device_id: 9c455b543138653c1cf48c4579dfe663
     entity_id: 206aaeddaa8950e1ec4a30fc52469193
     domain: switch
-  mode: single
 - alias: STYRBAR Hosťovská - Ovládanie žalúzií
-  description: Ovládanie žalúzií cover.hostovska_l a cover.hostovska_p cez IKEA STYRBAR
   id: styrbar_hostovska_covers
+  description: Ovládanie žalúzií cover.hostovska_l a cover.hostovska_p cez IKEA STYRBAR
   mode: restart
   trigger:
   - platform: mqtt
@@ -926,6 +1041,7 @@
 - id: vetranie_zmena_stupna
   alias: Vetranie - Zmena stupňa cez dashboard
   description: ''
+  mode: single
   triggers:
   - entity_id: input_number.vetranie_stupen
     trigger: state
@@ -934,12 +1050,13 @@
     entity_id: input_boolean.vetranie_forced_off
     state: 'off'
   actions:
-  - data:
+  - action: script.vetranie_nastav_stupen
+    data:
       stupen: '{{ trigger.to_state.state | int }}'
-    action: script.vetranie_nastav_stupen
 - id: vetranie_cas_rano
   alias: Vetranie - Ráno 6:00 [2]
   description: ''
+  mode: single
   triggers:
   - at: 06:00:00
     trigger: time
@@ -948,12 +1065,13 @@
     entity_id: input_boolean.vetranie_forced_off
     state: 'off'
   actions:
-  - data:
+  - action: script.vetranie_nastav_stupen
+    data:
       stupen: 2
-    action: script.vetranie_nastav_stupen
 - id: vetranie_cas_den
   alias: Vetranie - Deň 9:00 [2]
   description: ''
+  mode: single
   triggers:
   - at: 09:00:00
     trigger: time
@@ -962,12 +1080,13 @@
     entity_id: input_boolean.vetranie_forced_off
     state: 'off'
   actions:
-  - data:
+  - action: script.vetranie_nastav_stupen
+    data:
       stupen: 2
-    action: script.vetranie_nastav_stupen
 - id: vetranie_cas_noc
   alias: Vetranie - Noc 20:30 [0]
   description: ''
+  mode: single
   triggers:
   - at: '20:30:00'
     trigger: time
@@ -976,12 +1095,13 @@
     entity_id: input_boolean.vetranie_forced_off
     state: 'off'
   actions:
-  - data:
+  - action: script.vetranie_nastav_stupen
+    data:
       stupen: 0
-    action: script.vetranie_nastav_stupen
 - id: '1773389009913'
   alias: Vetranie - PolNoc - o 00:30 [5]
   description: ''
+  mode: single
   triggers:
   - at: 00:30:00
     trigger: time
@@ -990,13 +1110,13 @@
     entity_id: input_boolean.vetranie_forced_off
     state: 'off'
   actions:
-  - data:
+  - action: script.vetranie_nastav_stupen
+    data:
       stupen: 5
-    action: script.vetranie_nastav_stupen
-  mode: single
 - id: cost_tracking_klima_update
   alias: Náklady - Klíma aktualizácia
   description: Každých 5 minút počíta náklady klímy podľa aktuálnej tarify
+  mode: single
   trigger:
   - platform: time_pattern
     minutes: /5
@@ -1009,10 +1129,10 @@
     state: 'on'
   action:
   - variables:
-      klima_power_kw: "{% set energy_today = states('sensor.klima_cojirbfaaai_today_energy_consumption')\
-        \ | float(0) %} {% set work_time_min = states('sensor.klima_cojirbfaaai_today_work_time')\
-        \ | float(1) %} {% if work_time_min > 0 %}\\n  {{ (energy_today / (work_time_min\
-        \ / 60)) }}\\n{% else %}\\n  1.0\\n{% endif %}\\n"
+      klima_power_kw: '{% set energy_today = states(''sensor.klima_cojirbfaaai_today_energy_consumption'')
+        | float(0) %} {% set work_time_min = states(''sensor.klima_cojirbfaaai_today_work_time'')
+        | float(1) %} {% if work_time_min > 0 %}{{ (energy_today / (work_time_min
+        / 60)) }} {% else %}1.0 {% endif %}'
       energy_5min: '{{ (klima_power_kw | float(1.0) * 5 / 60) | round(4) }}'
       price_kwh: '{{ state_attr(''sensor.aktualna_tarifa'', ''price_eur_kwh'') | float(0)
         }}'
@@ -1035,10 +1155,10 @@
     data:
       value: '{{ (states(''input_number.energy_daily_klima'') | float(0) + energy_5min
         | float(0)) | round(3) }}'
-  mode: single
 - id: cost_tracking_drazice_update
   alias: Náklady - Dražice aktualizácia
   description: Každých 5 minút počíta náklady Dražice keď hrieva (2000W)
+  mode: single
   trigger:
   - platform: time_pattern
     minutes: /5
@@ -1074,10 +1194,10 @@
     data:
       value: '{{ (states(''input_number.energy_daily_bojler_drazice'') | float(0)
         + energy_5min) | round(3) }}'
-  mode: single
 - id: cost_tracking_ariston_update
   alias: Náklady - Ariston aktualizácia
   description: Každých 5 minút počíta náklady Ariston keď je zapnutý
+  mode: single
   trigger:
   - platform: time_pattern
     minutes: /5
@@ -1114,10 +1234,10 @@
     data:
       value: '{{ (states(''input_number.energy_daily_bojler_ariston'') | float(0)
         + energy_5min | float(0)) | round(3) }}'
-  mode: single
 - id: cost_tracking_daily_reset
   alias: Náklady - Denný reset
   description: O polnoci resetuje denné počítadlá nákladov
+  mode: single
   trigger:
   - platform: time
     at: 00:00:00
@@ -1137,10 +1257,10 @@
     data:
       name: Cost Tracking
       message: "\U0001F504 Denné počítadlá nákladov resetované"
-  mode: single
 - id: cost_tracking_monthly_reset
   alias: Náklady - Mesačný reset
   description: Na začiatku mesiaca resetuje mesačné počítadlá
+  mode: single
   trigger:
   - platform: time
     at: 00:00:05
@@ -1151,10 +1271,10 @@
   - service: logbook.log
     data:
       name: Cost Tracking
-      message: "\U0001F4CA Mesačný report - Klíma: {{ states('input_number.cost_monthly_klima')\
-        \ | round(2) }} EUR, Dražice: {{ states('input_number.cost_monthly_bojler_drazice')\
-        \ | round(2) }} EUR, Ariston: {{ states('input_number.cost_monthly_bojler_ariston')\
-        \ | round(2) }} EUR\n"
+      message: "\U0001F4CA Mesačný report - Klíma: {{ states('input_number.cost_monthly_klima')
+        | round(2) }} EUR, Dražice: {{ states('input_number.cost_monthly_bojler_drazice')
+        | round(2) }} EUR, Ariston: {{ states('input_number.cost_monthly_bojler_ariston')
+        | round(2) }} EUR"
   - service: input_number.set_value
     target:
       entity_id:
@@ -1163,10 +1283,10 @@
       - input_number.cost_monthly_bojler_ariston
     data:
       value: 0
-  mode: single
 - id: vetranie_co2_high
   alias: Vetranie - CO2 vysoké - zvýšiť
   description: Pri vysokom CO2 zvýši stupeň vetrania
+  mode: single
   trigger:
   - platform: numeric_state
     entity_id: sensor.wifi_smart_switch_carbon_dioxide
@@ -1181,10 +1301,8 @@
     entity_id: input_boolean.vetranie_forced_off
     state: 'off'
   - condition: template
-    value_template: '{{ states(''input_number.vetranie_stupen'') | int < states(''input_number.vetranie_co2_stupen'')
-      | int }}
-
-      '
+    value_template: "{{ states('input_number.vetranie_stupen') | int\n   < states('input_number.vetranie_co2_stupen')
+      | int }}"
   action:
   - service: script.vetranie_nastav_stupen
     data:
@@ -1195,10 +1313,10 @@
       message: ⬆️ CO2 vysoké ({{ states('sensor.wifi_smart_switch_carbon_dioxide')
         }} ppm) - stupeň zvýšený na {{ states('input_number.vetranie_co2_stupen')
         }}
-  mode: single
 - id: vetranie_co2_low
   alias: Vetranie - CO2 nízke - znížiť
   description: Pri nízkom CO2 vráti stupeň vetrania na predchádzajúci
+  mode: single
   trigger:
   - platform: numeric_state
     entity_id: sensor.wifi_smart_switch_carbon_dioxide
@@ -1213,9 +1331,7 @@
     entity_id: input_boolean.vetranie_forced_off
     state: 'off'
   - condition: template
-    value_template: '{{ states(''input_number.vetranie_stupen'') | int > 1 }}
-
-      '
+    value_template: '{{ states(''input_number.vetranie_stupen'') | int > 1 }}'
   action:
   - service: script.vetranie_nastav_stupen
     data:
@@ -1225,10 +1341,10 @@
       name: Vetranie CO2
       message: ⬇️ CO2 nízke ({{ states('sensor.wifi_smart_switch_carbon_dioxide')
         }} ppm) - stupeň znížený na 1
-  mode: single
 - id: vetranie_forced_off_activated
   alias: Vetranie - Forced OFF aktivované
   description: Pri zapnutí forced_off uloží aktuálny stupeň a vypne vetranie na 0
+  mode: single
   trigger:
   - platform: state
     entity_id: input_boolean.vetranie_forced_off
@@ -1250,18 +1366,16 @@
   - service: persistent_notification.create
     data:
       title: "\U0001F4A8 Vetranie - Vynútené vypnutie"
-      message: 'Vetranie je vynútene vypnuté (bol stupeň {{ states(''input_number.vetranie_stupen_pred_forced_off'')
-        }}). {% if is_state(''input_boolean.vetranie_auto_restart_enabled'', ''on'')
-        %} Automatický reštart o {{ states(''input_datetime.vetranie_auto_restart_time'')
-        }} na stupeň {{ states(''input_number.vetranie_auto_restart_stupen'') | int
+      message: Vetranie je vynútene vypnuté (bol stupeň {{ states('input_number.vetranie_stupen_pred_forced_off')
+        }}). {% if is_state('input_boolean.vetranie_auto_restart_enabled', 'on') %}
+        Automatický reštart o {{ states('input_datetime.vetranie_auto_restart_time')
+        }} na stupeň {{ states('input_number.vetranie_auto_restart_stupen') | int
         }}. {% else %} Automatický reštart nie je nastavený. {% endif %}
-
-        '
       notification_id: vetranie_forced_off
-  mode: single
 - id: vetranie_forced_off_deactivated
   alias: Vetranie - Forced OFF deaktivované
   description: Pri vypnutí forced_off obnoví normálnu prevádzku
+  mode: single
   trigger:
   - platform: state
     entity_id: input_boolean.vetranie_forced_off
@@ -1274,10 +1388,10 @@
     data:
       name: Vetranie
       message: ✅ Vynútené vypnutie zrušené - automatizácia obnovená
-  mode: single
 - id: vetranie_auto_restart
   alias: Vetranie - Automatický reštart po forced off
   description: V nastavenom čase vypne forced_off a nastaví požadovaný stupeň
+  mode: single
   trigger:
   - platform: time
     at: input_datetime.vetranie_auto_restart_time
@@ -1305,10 +1419,10 @@
   - service: persistent_notification.dismiss
     data:
       notification_id: vetranie_forced_off
-  mode: single
 - id: klima_health_switch_on
   alias: Klíma - Zapnúť Health pri zapnutí klímy
   description: Pri zapnutí klimatizácie automaticky zapne aj Health (Healthy) prepínač
+  mode: single
   trigger:
   - platform: state
     entity_id: switch.klima_cojirbfaaai_power_switch
@@ -1323,10 +1437,172 @@
     data:
       name: Klíma
       message: "\U0001F3E5 Health prepínač automaticky zapnutý spolu s klimatizáciou"
+- id: sw_outdoor_lidl_surplus
+  alias: Outdoor Lidl - Zapínanie pri prebytkoch
+  description: Zapne sw_outdoor_lidl keď sú prebytky ≥100W po 15 min, vypne keď klesnú
+    pod 0W po 15 min.
+  mode: single
+  trigger:
+  - platform: numeric_state
+    entity_id: sensor.gw_surplus
+    above: 100
+    for:
+      minutes: 15
+    id: surplus_on
+  - platform: numeric_state
+    entity_id: sensor.gw_surplus
+    below: 0
+    for:
+      minutes: 15
+    id: surplus_off
+  action:
+  - choose:
+    - conditions:
+      - condition: trigger
+        id: surplus_on
+      - condition: state
+        entity_id: switch.sw_outdoor_lidl
+        state: 'off'
+      sequence:
+      - service: switch.turn_on
+        target:
+          entity_id: switch.sw_outdoor_lidl
+      - service: logbook.log
+        data:
+          name: Outdoor Lidl
+          message: "\U0001F7E2 Zapnutý - prebytky {{ states('sensor.gw_surplus') }}W
+            (≥100W stabilne 15 min)"
+    - conditions:
+      - condition: trigger
+        id: surplus_off
+      - condition: state
+        entity_id: switch.sw_outdoor_lidl
+        state: 'on'
+      sequence:
+      - service: switch.turn_off
+        target:
+          entity_id: switch.sw_outdoor_lidl
+      - service: logbook.log
+        data:
+          name: Outdoor Lidl
+          message: "\U0001F534 Vypnutý - prebytky {{ states('sensor.gw_surplus') }}W
+            (<0W stabilne 15 min)"
+- id: kvetiny_alarm_set
+  alias: Kvety - Nastav alarm boolean
+  description: Zapne/vypne input_boolean.kvetiny_alarm podla vlhkosti
+  triggers:
+  - entity_id:
+    - sensor.plant_sensor_b3e2_moisture
+    below: 9
+    id: alarm_on
+    trigger: numeric_state
+  - entity_id: sensor.plant_sensor_b3c1_moisture
+    below: 20
+    id: alarm_on
+    trigger: numeric_state
+  - entity_id:
+    - sensor.flowersoil_soil_moisture
+    below: 1
+    id: alarm_on
+    trigger: numeric_state
+  - entity_id: sensor.flowersoil_water_warning
+    to: alarm
+    id: alarm_on
+    trigger: state
+  - entity_id:
+    - sensor.plant_sensor_b3e2_moisture
+    above: 20
+    id: alarm_off
+    trigger: numeric_state
+  - entity_id: sensor.plant_sensor_b3c1_moisture
+    above: 25
+    id: alarm_off
+    trigger: numeric_state
+  - entity_id: sensor.flowersoil_soil_moisture
+    above: 5
+    id: alarm_off
+    trigger: numeric_state
+  - entity_id: sensor.flowersoil_water_warning
+    to: ok
+    id: alarm_off
+    trigger: state
+  - event: start
+    id: alarm_off
+    trigger: homeassistant
+  actions:
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: '{{ trigger.id == ''alarm_on'' }}'
+      sequence:
+      - target:
+          entity_id: input_boolean.kvetiny_alarm
+        action: input_boolean.turn_on
+    - conditions:
+      - condition: template
+        value_template: '{{ trigger.id == ''alarm_off'' }}'
+      sequence:
+      - condition: template
+        value_template: '{% set b3e2 = states(''sensor.plant_sensor_b3e2_moisture'')
+          | float(100) %} {% set b3c1 = states(''sensor.plant_sensor_b3c1_moisture'')
+          | float(100) %} {% set soil = states(''sensor.flowersoil_soil_moisture'')
+          | float(100) %} {% set warn = states(''sensor.flowersoil_water_warning'')
+          %} {{ b3e2 >= 25 and b3c1 >= 25 and soil >= 5 and warn != ''alarm'' }}
+
+          '
+      - target:
+          entity_id: input_boolean.kvetiny_alarm
+        action: input_boolean.turn_off
+  mode: single
+- id: kvetiny_notifikacia_vlhkost
+  alias: Kvety - Notifikácia nízkej vlhkosti
+  description: Upozorní keď treba kvety zalievať
+  triggers:
+  - entity_id: sensor.flowersoil_water_warning
+    to: alarm
+    id: flowersoil_alarm
+    trigger: state
+  - entity_id: sensor.plant_sensor_b3e2_moisture
+    below: 9
+    for:
+      minutes: 10
+    id: b3e2_low
+    trigger: numeric_state
+  - entity_id: sensor.plant_sensor_b3c1_moisture
+    below: 20
+    for:
+      minutes: 10
+    id: b3c1_low
+    trigger: numeric_state
+  actions:
+  - data:
+      title: "\U0001F331 Kvety - Treba zalievať"
+      message: "{% if trigger.id == 'flowersoil_alarm' %} \U0001F4A7 FlowerSoil: Nízka
+        vlhkosť pôdy - treba zalievať! {% elif trigger.id == 'b3e2_low' %} \U0001F4A7
+        Kvetináč B3E2: Vlhkosť {{ states('sensor.plant_sensor_b3e2_moisture') }}%
+        - treba zalievať! {% elif trigger.id == 'b3c1_low' %} \U0001F4A7 Kvetináč
+        B3C1: Vlhkosť {{ states('sensor.plant_sensor_b3c1_moisture') }}% - treba zalievať!
+        {% endif %}"
+      notification_id: kvetiny_low_moisture
+    action: persistent_notification.create
+  - target:
+      entity_id:
+      - notify.sm_s911b
+      - notify.iphone
+    data:
+      title: "\U0001F331 Kvety - Treba zalievať"
+      message: "{% if trigger.id == 'flowersoil_alarm' %} \U0001F4A7 FlowerSoil: Nízka
+        vlhkosť pôdy! {% elif trigger.id == 'b3e2_low' %} \U0001F4A7 Kvetináč B3E2:
+        Vlhkosť {{ states('sensor.plant_sensor_b3e2_moisture') }}% {% elif trigger.id
+        == 'b3c1_low' %} \U0001F4A7 Kvetináč B3C1: Vlhkosť {{ states('sensor.plant_sensor_b3c1_moisture')
+        }}% {% endif %}"
+    continue_on_error: true
+    action: notify.send_message
   mode: single
 - id: '1775680876612'
   alias: Vetranie - 22:00 [4]
   description: ''
+  mode: single
   triggers:
   - at: '22:00:00'
     trigger: time
@@ -1335,7 +1611,6 @@
     entity_id: input_boolean.vetranie_forced_off
     state: 'off'
   actions:
-  - data:
+  - action: script.vetranie_nastav_stupen
+    data:
       stupen: 4
-    action: script.vetranie_nastav_stupen
-  mode: single

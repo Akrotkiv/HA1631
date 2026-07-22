@@ -1,0 +1,87 @@
+# ============================================
+# EV MANUÁLNY REŽIM  (núdzový kill-switch)
+# packages/ev_manual.yaml
+#
+# Jeden prepínač input_boolean.ev_manual_mode:
+#   ZAP  = vypne CELÚ automatiku nabíjania (regulácia prúdu, solar pauzy/obnovy,
+#          tarify, plán, detekcia auta, cieľ, recovery, alerty). Uvoľní softvérový
+#          blok a zapne availability, aby sa dalo čisto ovládať ručne.
+#   VYP  = zapne automatiku späť.
+#
+# RUČNÉ OVLÁDANIE (keď je ZAP):
+#   - štart/stop : switch.hacharger_charge_control
+#   - prúd       : number.hacharger_maximum_current  (drží, lebo regulácia je OFF)
+#
+# Sessions (ev_session_*, ev_sledovanie_kabla, ev_stats_*) bežia ďalej — nevypína ich.
+# Celý plugin zmažeš odstránením tohto súboru + jeho include riadku v configuration.yaml.
+# ============================================
+
+input_boolean:
+  ev_manual_mode:
+    name: "EV - Manuálny režim (vypni automatiku)"
+    icon: mdi:hand-back-right
+
+automation:
+  - id: ev_manual_mode_apply
+    alias: "EV - Manuálny režim (prepínač automatiky)"
+    mode: queued
+    trigger:
+      - platform: state
+        entity_id: input_boolean.ev_manual_mode
+      - platform: homeassistant
+        event: start
+    action:
+      - choose:
+          # ---- MANUÁL ZAP → vypni automatiku ----
+          - conditions: "{{ is_state('input_boolean.ev_manual_mode','on') }}"
+            sequence:
+              - service: automation.turn_off
+                data:
+                  stop_actions: true
+                target:
+                  entity_id: &ctrl_automations
+                    - automation.ev_regulacia_prudu
+                    - automation.ev_solar_pauza
+                    - automation.ev_solar_obnovenie
+                    - automation.ev_zmena_tarify
+                    - automation.ev_ciel_dosiahnuty
+                    - automation.ev_kontrola_pri_starte
+                    - automation.ev_detekcia_vozidla
+                    - automation.ev_zmena_rezimu
+                    - automation.ev_reset_pri_odpojeni
+                    - automation.ev_plan_start
+                    - automation.ev_auto_recovery_zaseknuteho_nabijania
+                    - automation.ev_upozornenie_nenabija
+                    - automation.ev_upozornenie_zrusit_nabija
+              # uvoľni softvérový blok, nech sa dá ovládať ručne
+              - service: input_boolean.turn_off
+                target: { entity_id: input_boolean.ev_charging_blocked }
+              - service: input_select.select_option
+                target: { entity_id: input_select.ev_block_reason }
+                data: { option: "none" }
+              - service: switch.turn_on
+                target: { entity_id: switch.hacharger_availability }
+              - service: persistent_notification.create
+                data:
+                  title: "🔧 EV — manuálny režim ZAP"
+                  message: >
+                    Automatika nabíjania je VYPNUTÁ. Ovládaj ručne:
+                    **Nabíjať (štart/stop)** = switch.hacharger_charge_control,
+                    **Prúd** = number.hacharger_maximum_current.
+                    (Sessions a štatistiky bežia ďalej.)
+                  notification_id: ev_manual_mode
+              - service: logbook.log
+                data:
+                  name: "EV Manuál"
+                  message: "🔧 Manuálny režim ZAP — automatika vypnutá."
+        # ---- MANUÁL VYP → zapni automatiku späť ----
+        default:
+          - service: automation.turn_on
+            target:
+              entity_id: *ctrl_automations
+          - service: persistent_notification.dismiss
+            data: { notification_id: ev_manual_mode }
+          - service: logbook.log
+            data:
+              name: "EV Manuál"
+              message: "✅ Manuálny režim VYP — automatika zapnutá."

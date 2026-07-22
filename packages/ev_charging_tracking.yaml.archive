@@ -901,7 +901,7 @@ automation:
       # Zapni nabíjanie
       - service: switch.turn_on
         target:
-          entity_id: switch.hacharger_charge_control
+          entity_id: switch.hacharger_availability
       
       # Ak je "Iba raz", vypni plánovanie
       - choose:
@@ -955,6 +955,9 @@ automation:
       - service: switch.turn_off
         target:
           entity_id: switch.hacharger_charge_control
+      - service: switch.turn_off
+        target:
+          entity_id: switch.hacharger_availability
       - service: logbook.log
         data:
           name: "EV Charging"
@@ -978,6 +981,9 @@ automation:
       - service: switch.turn_off
         target:
           entity_id: switch.hacharger_charge_control
+      - service: switch.turn_off
+        target:
+          entity_id: switch.hacharger_availability
       - service: input_boolean.turn_on
         target:
           entity_id: input_boolean.ev_paused_by_tariff
@@ -1014,7 +1020,7 @@ automation:
     action:
       - service: switch.turn_on
         target:
-          entity_id: switch.hacharger_charge_control
+          entity_id: switch.hacharger_availability
       - service: input_boolean.turn_off
         target:
           entity_id: input_boolean.ev_paused_by_tariff
@@ -1034,36 +1040,32 @@ automation:
   - id: ev_soc_limit_reached
     alias: "EV - SOC limit dosiahnutý"
     trigger:
-      - platform: template
-        value_template: >
-          {{ states('sensor.battery_level') | float(0) >= states('input_number.ev_soc_limit') | float(100) }}
+      - platform: numeric_state
+        entity_id: sensor.ovms_soc
+        above: input_number.ev_soc_limit
     condition:
-      # SOC limit je zapnutý
       - condition: state
         entity_id: input_boolean.ev_soc_limit_enabled
         state: "on"
-      # Wallbox nabíja
       - condition: state
         entity_id: sensor.hacharger_status_connector
         state: "Charging"
     action:
-      # Vypni nabíjanie
       - service: switch.turn_off
         target:
           entity_id: switch.hacharger_charge_control
-      
-      # Loguj
+      - service: switch.turn_off
+        target:
+          entity_id: switch.hacharger_availability
       - service: logbook.log
         data:
           name: "EV Charging"
           message: "🔋 SOC limit {{ states('input_number.ev_soc_limit') }}% dosiahnutý - nabíjanie zastavené"
-      
-      # Notifikácia
       - service: persistent_notification.create
         data:
           title: "EV Nabíjanie dokončené"
           message: >
-            ✅ Batéria nabitá na {{ states('sensor.battery_level') }}%
+            ✅ Batéria nabitá na {{ states('sensor.ovms_soc') }}%
             (limit: {{ states('input_number.ev_soc_limit') }}%)
           notification_id: ev_soc_limit_reached
   
@@ -1072,7 +1074,7 @@ automation:
     alias: "EV - Plne nabité"
     trigger:
       - platform: numeric_state
-        entity_id: sensor.battery_level
+        entity_id: sensor.ovms_soc
         above: 99
     condition:
       - condition: state
@@ -1082,7 +1084,7 @@ automation:
       - service: persistent_notification.create
         data:
           title: "EV Nabíjanie"
-          message: "🔋 Batéria je plne nabitá ({{ states('sensor.battery_level') }}%)"
+          message: "🔋 Batéria je plne nabitá ({{ states('sensor.ovms_soc') }}%)"
           notification_id: ev_fully_charged
 
   # ========================================
@@ -1109,7 +1111,10 @@ automation:
       - service: switch.turn_off
         target:
           entity_id: switch.hacharger_charge_control
-      
+      - service: switch.turn_off
+        target:
+          entity_id: switch.hacharger_availability
+
       # Vypočítaj čas najbližšej povolenej tarify
       # T4 ráno (06-09) → ďalšia je T3 o 09:00
       # T4 večer (19-22) → ďalšia je T1 o 22:00

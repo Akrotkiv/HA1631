@@ -10,6 +10,160 @@
           "title": "Home",
           "cards": [
             {
+              "type": "conditional",
+              "conditions": [
+                {
+                  "condition": "state",
+                  "entity": "input_boolean.kvetiny_alarm",
+                  "state": "on"
+                }
+              ],
+              "card": {
+                "type": "vertical-stack",
+                "cards": [
+                  {
+                    "type": "markdown",
+                    "content": "## 💧 Rastlinomery — Treba zalievať!\nVlhkosť pôdy je pod 20 %. Prosím, zalejte rastliny."
+                  },
+                  {
+                    "type": "grid",
+                    "columns": 3,
+                    "square": false,
+                    "cards": [
+                      {
+                        "type": "gauge",
+                        "entity": "sensor.plant_sensor_b3e2_moisture",
+                        "name": "🌿 HOYA (B3E2)",
+                        "min": 0,
+                        "needle": true,
+                        "severity": {
+                          "green": 20,
+                          "yellow": 9,
+                          "red": 0
+                        },
+                        "max": 75
+                      },
+                      {
+                        "type": "gauge",
+                        "entity": "sensor.plant_sensor_b3c1_moisture",
+                        "name": "🌿 Lemon Grass (B3C1)",
+                        "min": 0,
+                        "needle": true,
+                        "severity": {
+                          "green": 40,
+                          "yellow": 20,
+                          "red": 0
+                        },
+                        "max": 75
+                      },
+                      {
+                        "type": "gauge",
+                        "entity": "sensor.flowersoil_soil_moisture",
+                        "name": "🌿 Strelitzia",
+                        "min": 0,
+                        "needle": true,
+                        "severity": {
+                          "green": 40,
+                          "yellow": 20,
+                          "red": 0
+                        },
+                        "max": 75
+                      }
+                    ]
+                  },
+                  {
+                    "type": "grid",
+                    "columns": 3,
+                    "square": false,
+                    "cards": [
+                      {
+                        "type": "entities",
+                        "title": "🌿 HOYA (B3E2)",
+                        "entities": [
+                          {
+                            "entity": "sensor.plant_sensor_b3e2_moisture",
+                            "name": "Vlhkosť pôdy"
+                          },
+                          {
+                            "entity": "sensor.plant_sensor_b3e2_temperature",
+                            "name": "Teplota"
+                          },
+                          {
+                            "entity": "sensor.plant_sensor_b3e2_conductivity",
+                            "name": "Vodivosť"
+                          },
+                          {
+                            "entity": "sensor.plant_sensor_b3e2_illuminance",
+                            "name": "Osvetlenie"
+                          },
+                          {
+                            "entity": "sensor.plant_sensor_b3e2_battery",
+                            "name": "Batéria"
+                          }
+                        ]
+                      },
+                      {
+                        "type": "entities",
+                        "title": "🌿 Lemon Grass (B3C1)",
+                        "entities": [
+                          {
+                            "entity": "sensor.plant_sensor_b3c1_moisture",
+                            "name": "Vlhkosť pôdy"
+                          },
+                          {
+                            "entity": "sensor.plant_sensor_b3c1_temperature",
+                            "name": "Teplota"
+                          },
+                          {
+                            "entity": "sensor.plant_sensor_b3c1_conductivity",
+                            "name": "Vodivosť"
+                          },
+                          {
+                            "entity": "sensor.plant_sensor_b3c1_illuminance",
+                            "name": "Osvetlenie"
+                          },
+                          {
+                            "entity": "sensor.plant_sensor_b3c1_battery",
+                            "name": "Batéria"
+                          }
+                        ]
+                      },
+                      {
+                        "type": "entities",
+                        "title": "🌿 FlowerSoil",
+                        "entities": [
+                          {
+                            "entity": "sensor.flowersoil_soil_moisture",
+                            "name": "Vlhkosť pôdy"
+                          },
+                          {
+                            "entity": "sensor.flowersoil_temperature",
+                            "name": "Teplota"
+                          },
+                          {
+                            "entity": "sensor.flowersoil_humidity",
+                            "name": "Vlhkosť vzduchu"
+                          },
+                          {
+                            "entity": "sensor.flowersoil_illuminance",
+                            "name": "Osvetlenie"
+                          },
+                          {
+                            "entity": "sensor.flowersoil_water_warning",
+                            "name": "⚠️ Status"
+                          },
+                          {
+                            "entity": "sensor.flowersoil_battery_state",
+                            "name": "Batéria"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
               "type": "vertical-stack",
               "cards": [
                 {
@@ -147,6 +301,15 @@
                 }
               ],
               "title": "Outdoor"
+            },
+            {
+              "type": "tile",
+              "entity": "switch.pw_outdoor_ldl",
+              "features": [
+                {
+                  "type": "toggle"
+                }
+              ]
             },
             {
               "type": "entities",
@@ -463,15 +626,39 @@
             {
               "type": "entities",
               "entities": [
-                "sensor.active_power",
-                "sensor.house_consumption",
-                "sensor.meter_total_energy_export",
-                "sensor.meter_total_energy_import",
-                "sensor.pv_power",
-                "sensor.today_s_pv_generation",
-                "sensor.total_battery_charge",
-                "sensor.total_battery_discharge",
-                "sensor.total_pv_generation"
+                {
+                  "entity": "sensor.active_power"
+                },
+                {
+                  "entity": "sensor.house_consumption"
+                },
+                {
+                  "entity": "sensor.meter_total_energy_export"
+                },
+                {
+                  "entity": "sensor.meter_total_energy_import"
+                },
+                {
+                  "entity": "sensor.pv_power"
+                },
+                {
+                  "entity": "sensor.today_s_pv_generation"
+                },
+                {
+                  "entity": "sensor.total_battery_charge"
+                },
+                {
+                  "entity": "sensor.total_battery_discharge"
+                },
+                {
+                  "entity": "sensor.total_pv_generation"
+                },
+                {
+                  "entity": "sensor.inverter_temperature_radiator"
+                },
+                {
+                  "entity": "sensor.inverter_temperature_module"
+                }
               ],
               "title": "🚪 Chodbicka"
             },
@@ -493,13 +680,6 @@
               "entities": [
                 "person.viktorka"
               ]
-            },
-            {
-              "type": "entities",
-              "entities": [
-                "binary_sensor.nizka_tarifa_aktivna"
-              ],
-              "title": "Binary sensor"
             },
             {
               "type": "entities",
@@ -802,847 +982,10 @@
             },
             {
               "type": "entity",
-              "entity": "switch.pw_outdor_ldl"
-            }
-          ]
-        },
-        {
-          "type": "masonry",
-          "path": "technical",
-          "title": "Technical",
-          "subview": false,
-          "cards": [
-            {
-              "type": "vertical-stack",
-              "cards": [
-                {
-                  "type": "entities",
-                  "title": "💰 Nastavenie taríf (EUR/kWh s distribúciou a DPH)",
-                  "entities": [
-                    {
-                      "type": "section",
-                      "label": "Aktuálny stav"
-                    },
-                    {
-                      "entity": "sensor.aktualna_tarifa",
-                      "name": "Aktuálna tarifa"
-                    },
-                    {
-                      "entity": "sensor.aktualna_cena_kwh",
-                      "name": "Aktuálna cena"
-                    },
-                    {
-                      "entity": "binary_sensor.je_vikend",
-                      "name": "Je víkend"
-                    },
-                    {
-                      "type": "divider"
-                    },
-                    {
-                      "type": "section",
-                      "label": "Ceny TÝŽDEŇ (Po-Pi)"
-                    },
-                    {
-                      "entity": "input_number.tariff_t1_price",
-                      "name": "T1 Noc (22:00-06:00)"
-                    },
-                    {
-                      "entity": "input_number.tariff_t3_price",
-                      "name": "T3 Predpoludnie (09:00-13:00)"
-                    },
-                    {
-                      "entity": "input_number.tariff_t2_price",
-                      "name": "T2 Popoludnie (13:00-19:00)"
-                    },
-                    {
-                      "entity": "input_number.tariff_t4_price",
-                      "name": "T4 Ráno/Večer (06-09, 19-22)"
-                    },
-                    {
-                      "type": "divider"
-                    },
-                    {
-                      "type": "section",
-                      "label": "Ceny VÍKEND (So-Ne) - zľava 12%"
-                    },
-                    {
-                      "entity": "input_number.tariff_t1_price_weekend",
-                      "name": "T1 Noc víkend"
-                    },
-                    {
-                      "entity": "input_number.tariff_t3_price_weekend",
-                      "name": "T3 Predpoludnie víkend"
-                    },
-                    {
-                      "entity": "input_number.tariff_t2_price_weekend",
-                      "name": "T2 Popoludnie víkend"
-                    },
-                    {
-                      "entity": "input_number.tariff_t4_price_weekend",
-                      "name": "T4 Ráno/Večer víkend"
-                    }
-                  ],
-                  "show_header_toggle": false
-                },
-                {
-                  "type": "entities",
-                  "title": "⏰ Časové pásma",
-                  "entities": [
-                    {
-                      "entity": "input_datetime.tariff_t1_start",
-                      "name": "T1 Noc - začiatok",
-                      "format": "time"
-                    },
-                    {
-                      "entity": "input_datetime.tariff_t1_end",
-                      "name": "T1 Noc - koniec",
-                      "format": "time"
-                    },
-                    {
-                      "type": "divider"
-                    },
-                    {
-                      "entity": "input_datetime.tariff_t3_start",
-                      "name": "T3 Predpoludnie - začiatok",
-                      "format": "time"
-                    },
-                    {
-                      "entity": "input_datetime.tariff_t3_end",
-                      "name": "T3 Predpoludnie - koniec",
-                      "format": "time"
-                    },
-                    {
-                      "type": "divider"
-                    },
-                    {
-                      "entity": "input_datetime.tariff_t2_start",
-                      "name": "T2 Popoludnie - začiatok",
-                      "format": "time"
-                    },
-                    {
-                      "entity": "input_datetime.tariff_t2_end",
-                      "name": "T2 Popoludnie - koniec",
-                      "format": "time"
-                    },
-                    {
-                      "type": "divider"
-                    },
-                    {
-                      "entity": "input_datetime.tariff_t4_morning_start",
-                      "name": "T4 ráno začiatok",
-                      "format": "time"
-                    },
-                    {
-                      "entity": "input_datetime.tariff_t4_morning_end",
-                      "name": "T4 ráno koniec",
-                      "format": "time"
-                    },
-                    {
-                      "entity": "input_datetime.tariff_t4_evening_start",
-                      "name": "T4 večer začiatok",
-                      "format": "time"
-                    },
-                    {
-                      "entity": "input_datetime.tariff_t4_evening_end",
-                      "name": "T4 večer koniec",
-                      "format": "time"
-                    }
-                  ],
-                  "show_header_toggle": false
-                },
-                {
-                  "type": "markdown",
-                  "content": "## 📋 Cenník\n| Tarifa | Čas | Týždeň | Víkend | |--------|-----|--------|--------| | T1 Noc | 22:00-06:00 | {{ states('input_number.tariff_t1_price') }} €/kWh | {{ states('input_number.tariff_t1_price_weekend') }} €/kWh | | T3 Predpol. | 09:00-13:00 | {{ states('input_number.tariff_t3_price') }} €/kWh | {{ states('input_number.tariff_t3_price_weekend') }} €/kWh | | T2 Popol. | 13:00-19:00 | {{ states('input_number.tariff_t2_price') }} €/kWh | {{ states('input_number.tariff_t2_price_weekend') }} €/kWh | | T4 Ráno/Več. | 06-09+19-22 | {{ states('input_number.tariff_t4_price') }} €/kWh | {{ states('input_number.tariff_t4_price_weekend') }} €/kWh |\n**Aktuálne:** {{ states('sensor.aktualna_tarifa') }} = **{{ states('sensor.aktualna_cena_kwh') }} EUR/kWh** {% if is_state('binary_sensor.je_vikend', 'on') %}🟢 Víkendová cena{% else %}📅 Pracovný deň{% endif %}\n"
-                }
-              ]
-            },
-            {
-              "type": "vertical-stack",
-              "cards": [
-                {
-                  "type": "entities",
-                  "title": "📊 Denné náklady spotrebičov",
-                  "entities": [
-                    {
-                      "entity": "input_boolean.cost_tracking_enabled",
-                      "name": "Sledovanie aktívne"
-                    },
-                    {
-                      "type": "divider"
-                    },
-                    {
-                      "type": "section",
-                      "label": "Dnes - náklady (EUR)"
-                    },
-                    {
-                      "entity": "sensor.klima_denne_naklady",
-                      "name": "🌬️ Klíma",
-                      "icon": "mdi:air-conditioner"
-                    },
-                    {
-                      "entity": "sensor.drazice_denne_naklady",
-                      "name": "🔥 Bojler Dražice",
-                      "icon": "mdi:water-boiler"
-                    },
-                    {
-                      "entity": "sensor.ariston_denne_naklady",
-                      "name": "💧 Bojler Ariston",
-                      "icon": "mdi:water-boiler-alert"
-                    },
-                    {
-                      "entity": "sensor.celkove_denne_naklady_spotrebicov",
-                      "name": "📊 Celkom dnes",
-                      "icon": "mdi:sigma"
-                    },
-                    {
-                      "type": "divider"
-                    },
-                    {
-                      "type": "section",
-                      "label": "Dnes - energia (kWh)"
-                    },
-                    {
-                      "entity": "input_number.energy_daily_klima",
-                      "name": "🌬️ Klíma"
-                    },
-                    {
-                      "entity": "input_number.energy_daily_bojler_drazice",
-                      "name": "🔥 Dražice"
-                    },
-                    {
-                      "entity": "input_number.energy_daily_bojler_ariston",
-                      "name": "💧 Ariston"
-                    }
-                  ],
-                  "show_header_toggle": false,
-                  "state_color": true
-                },
-                {
-                  "type": "entities",
-                  "title": "📅 Mesačné náklady spotrebičov",
-                  "entities": [
-                    {
-                      "entity": "sensor.klima_mesacne_naklady",
-                      "name": "🌬️ Klíma"
-                    },
-                    {
-                      "entity": "sensor.drazice_mesacne_naklady",
-                      "name": "🔥 Bojler Dražice"
-                    },
-                    {
-                      "entity": "sensor.ariston_mesacne_naklady",
-                      "name": "💧 Bojler Ariston"
-                    }
-                  ],
-                  "show_header_toggle": false,
-                  "state_color": true
-                }
-              ]
-            },
-            {
-              "type": "entities",
-              "title": "🔄 Git Push",
-              "entities": [
-                {
-                  "entity": "input_text.git_commit_message",
-                  "name": "Popis zmeny"
-                },
-                {
-                  "type": "button",
-                  "name": "Push to GitHub",
-                  "icon": "mdi:github",
-                  "tap_action": {
-                    "action": "call-service",
-                    "service": "script.git_push"
-                  },
-                  "action_name": "PUSH"
-                },
-                {
-                  "entity": "sensor.git_push_status",
-                  "name": "Posledný výsledok"
-                }
-              ]
-            },
-            {
-              "type": "vertical-stack",
-              "cards": [
-                {
-                  "type": "entities",
-                  "title": "💨 Vetranie - CO2 automatizácia",
-                  "show_header_toggle": false,
-                  "entities": [
-                    {
-                      "entity": "input_boolean.vetranie_co2_auto_enabled",
-                      "name": "CO2 automatizácia"
-                    },
-                    {
-                      "entity": "input_boolean.vetranie_forced_off",
-                      "name": "Vynútené vypnutie"
-                    },
-                    {
-                      "entity": "sensor.wifi_smart_switch_carbon_dioxide",
-                      "name": "Aktuálny CO2",
-                      "icon": "mdi:molecule-co2"
-                    },
-                    {
-                      "entity": "input_number.vetranie_stupen",
-                      "name": "Aktuálny stupeň"
-                    },
-                    {
-                      "type": "divider"
-                    },
-                    {
-                      "type": "section",
-                      "label": "CO2 prahy"
-                    },
-                    {
-                      "entity": "input_number.vetranie_co2_threshold_high",
-                      "name": "Prah vysoký (ppm)"
-                    },
-                    {
-                      "entity": "input_number.vetranie_co2_threshold_low",
-                      "name": "Prah nízky (ppm)"
-                    },
-                    {
-                      "entity": "input_number.vetranie_co2_stupen",
-                      "name": "Stupeň pri vysokom CO2"
-                    },
-                    {
-                      "type": "divider"
-                    },
-                    {
-                      "type": "section",
-                      "label": "Auto-reštart po forced off"
-                    },
-                    {
-                      "entity": "input_boolean.vetranie_auto_restart_enabled",
-                      "name": "Auto-reštart aktívny"
-                    },
-                    {
-                      "entity": "input_datetime.vetranie_auto_restart_time",
-                      "name": "Čas reštartu",
-                      "format": "time"
-                    },
-                    {
-                      "entity": "input_number.vetranie_auto_restart_stupen",
-                      "name": "Stupeň po reštarte"
-                    },
-                    {
-                      "entity": "input_number.vetranie_stupen_pred_forced_off",
-                      "name": "Stupeň pred forced off (info)"
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "title": "FVE",
-          "path": "fve",
-          "icon": "mdi:solar-power-variant-outline",
-          "type": "sections",
-          "max_columns": 4,
-          "sections": [
-            {
-              "type": "grid",
-              "column_span": 2,
-              "cards": [
-                {
-                  "type": "heading",
-                  "heading": "☀️ Aktuálna výroba",
-                  "heading_style": "title",
-                  "icon": "mdi:solar-power"
-                },
-                {
-                  "type": "tile",
-                  "entity": "sensor.pv_power",
-                  "name": "PV výkon",
-                  "icon": "mdi:solar-power",
-                  "color": "amber",
-                  "grid_options": {
-                    "columns": 6,
-                    "rows": 2
-                  }
-                },
-                {
-                  "type": "tile",
-                  "entity": "sensor.active_power",
-                  "name": "Prebytky / Grid",
-                  "icon": "mdi:transmission-tower",
-                  "color": "green",
-                  "grid_options": {
-                    "columns": 6,
-                    "rows": 2
-                  }
-                },
-                {
-                  "type": "tile",
-                  "entity": "sensor.house_consumption",
-                  "name": "Spotreba domu",
-                  "icon": "mdi:home-lightning-bolt",
-                  "color": "red"
-                },
-                {
-                  "type": "tile",
-                  "entity": "sensor.today_s_pv_generation",
-                  "name": "Výroba dnes",
-                  "icon": "mdi:counter",
-                  "color": "orange"
-                },
-                {
-                  "type": "tile",
-                  "entity": "sensor.meter_active_power_total",
-                  "name": "Meter power",
-                  "icon": "mdi:meter-electric"
-                },
-                {
-                  "type": "tile",
-                  "entity": "sensor.aktualna_tarifa",
-                  "name": "Tarifa",
-                  "icon": "mdi:flash"
-                },
-                {
-                  "type": "history-graph",
-                  "entities": [
-                    {
-                      "entity": "sensor.pv_power",
-                      "name": "PV výkon"
-                    },
-                    {
-                      "entity": "sensor.active_power",
-                      "name": "Prebytky"
-                    },
-                    {
-                      "entity": "sensor.house_consumption",
-                      "name": "Spotreba"
-                    }
-                  ],
-                  "hours_to_show": 24,
-                  "grid_options": {
-                    "columns": "full",
-                    "rows": 4
-                  }
-                }
-              ]
-            },
-            {
-              "type": "grid",
-              "column_span": 2,
-              "cards": [
-                {
-                  "type": "heading",
-                  "heading": "📊 Energia & štatistiky",
-                  "heading_style": "title",
-                  "icon": "mdi:chart-bar"
-                },
-                {
-                  "type": "tile",
-                  "entity": "sensor.meter_total_energy_export",
-                  "name": "Export celkom",
-                  "icon": "mdi:transmission-tower-export",
-                  "color": "green"
-                },
-                {
-                  "type": "tile",
-                  "entity": "sensor.meter_total_energy_import",
-                  "name": "Import celkom",
-                  "icon": "mdi:transmission-tower-import",
-                  "color": "red"
-                },
-                {
-                  "type": "tile",
-                  "entity": "sensor.total_pv_generation",
-                  "name": "Výroba celkom",
-                  "icon": "mdi:chart-line",
-                  "color": "amber"
-                },
-                {
-                  "type": "tile",
-                  "entity": "sensor.total_battery_charge",
-                  "name": "Batéria nabité",
-                  "icon": "mdi:battery-charging",
-                  "color": "blue"
-                },
-                {
-                  "type": "tile",
-                  "entity": "sensor.total_battery_discharge",
-                  "name": "Batéria vybité",
-                  "icon": "mdi:battery-arrow-down",
-                  "color": "orange"
-                },
-                {
-                  "type": "tile",
-                  "entity": "sensor.electricity_maps_co2_intensity",
-                  "name": "CO₂ intenzita",
-                  "icon": "mdi:molecule-co2"
-                },
-                {
-                  "type": "energy-distribution",
-                  "link_dashboard": true,
-                  "grid_options": {
-                    "columns": "full",
-                    "rows": 4
-                  }
-                }
-              ]
-            },
-            {
-              "type": "grid",
-              "column_span": 2,
-              "cards": [
-                {
-                  "type": "heading",
-                  "heading": "🔮 Predpoveď výroby",
-                  "heading_style": "title",
-                  "icon": "mdi:crystal-ball"
-                },
-                {
-                  "type": "tile",
-                  "entity": "sensor.solar_forecast_today",
-                  "name": "Predpoveď dnes",
-                  "icon": "mdi:solar-power",
-                  "color": "amber",
-                  "grid_options": {
-                    "columns": 4
-                  }
-                },
-                {
-                  "type": "tile",
-                  "entity": "sensor.solar_forecast_remaining_today",
-                  "name": "Zostáva dnes",
-                  "icon": "mdi:solar-panel",
-                  "color": "orange",
-                  "grid_options": {
-                    "columns": 4
-                  }
-                },
-                {
-                  "type": "tile",
-                  "entity": "sensor.solar_forecast_tomorrow",
-                  "name": "Predpoveď zajtra",
-                  "icon": "mdi:solar-power-variant",
-                  "color": "deep-orange",
-                  "grid_options": {
-                    "columns": 4
-                  }
-                },
-                {
-                  "type": "tile",
-                  "entity": "sensor.solar_forecast_now",
-                  "name": "Odhad teraz",
-                  "icon": "mdi:white-balance-sunny"
-                },
-                {
-                  "type": "tile",
-                  "entity": "sensor.solar_forecast_next_hour",
-                  "name": "Ďalšia hodina",
-                  "icon": "mdi:clock-fast"
-                },
-                {
-                  "type": "tile",
-                  "entity": "sensor.solar_peak_today",
-                  "name": "Špička dnes",
-                  "icon": "mdi:chart-bell-curve"
-                },
-                {
-                  "type": "tile",
-                  "entity": "sensor.solar_peak_tomorrow",
-                  "name": "Špička zajtra",
-                  "icon": "mdi:chart-bell-curve-cumulative"
-                },
-                {
-                  "type": "tile",
-                  "entity": "sensor.solar_forecast_tomorrow_rating",
-                  "name": "Hodnotenie zajtra",
-                  "grid_options": {
-                    "columns": "full"
-                  }
-                },
-                {
-                  "type": "markdown",
-                  "content": "### Predpoveď vs realita\n| | Hodnota | |---|---| | 🔮 Predpoveď dnes | {{ states('sensor.solar_forecast_today') }} kWh | | ☀️ Reálna výroba | {{ states('sensor.today_s_pv_generation') }} kWh | | 📉 Zostáva | {{ states('sensor.solar_forecast_remaining_today') }} kWh | | 🔮 Predpoveď zajtra | {{ states('sensor.solar_forecast_tomorrow') }} kWh | | ⚡ Špička zajtra | {{ states('sensor.solar_peak_tomorrow') }} W | | 📡 Zdroj | {{ states('input_select.solar_forecast_source') }} |\n",
-                  "grid_options": {
-                    "columns": "full"
-                  }
-                },
-                {
-                  "type": "energy-solar-graph",
-                  "grid_options": {
-                    "columns": "full",
-                    "rows": 7
-                  }
-                },
-                {
-                  "type": "custom:apexcharts-card",
-                  "header": {
-                    "title": "☀️ Predpoveď 48h (dnes + zajtra)",
-                    "show": true
-                  },
-                  "graph_span": "2d",
-                  "span": {
-                    "start": "day"
-                  },
-                  "apex_config": {
-                    "chart": {
-                      "height": 350
-                    },
-                    "legend": {
-                      "show": true,
-                      "position": "top"
-                    },
-                    "tooltip": {
-                      "x": {
-                        "format": "dd.MM HH:mm"
-                      }
-                    },
-                    "xaxis": {
-                      "labels": {
-                        "format": "HH:mm",
-                        "datetimeFormatter": {
-                          "hour": "HH:mm"
-                        }
-                      }
-                    },
-                    "yaxis": [
-                      {
-                        "title": {
-                          "text": "W"
-                        },
-                        "min": 0,
-                        "labels": {
-                          "formatter": "EVAL:function(val) { return Math.round(val) + ' W'; }\n"
-                        }
-                      }
-                    ],
-                    "annotations": {
-                      "xaxis": [
-                        {
-                          "x": "new Date(new Date().setHours(24,0,0,0)).getTime()",
-                          "borderColor": "#999",
-                          "strokeDashArray": 4,
-                          "label": {
-                            "text": "Zajtra",
-                            "orientation": "vertical",
-                            "style": {
-                              "color": "#fff",
-                              "background": "#666",
-                              "fontSize": "12px"
-                            }
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  "series": [
-                    {
-                      "entity": "sensor.solcast_forecast_today",
-                      "name": "Dnes (odhad)",
-                      "type": "area",
-                      "color": "#FF9800",
-                      "opacity": 0.3,
-                      "stroke_width": 2,
-                      "data_generator": "return entity.attributes.detailedForecast.map((entry) => {\n  return [new Date(entry.period_start).getTime(), entry.pv_estimate * 1000];\n});\n"
-                    },
-                    {
-                      "entity": "sensor.solcast_forecast_tomorrow",
-                      "name": "Zajtra (odhad)",
-                      "type": "area",
-                      "color": "#2196F3",
-                      "opacity": 0.3,
-                      "stroke_width": 2,
-                      "data_generator": "return entity.attributes.detailedForecast.map((entry) => {\n  return [new Date(entry.period_start).getTime(), entry.pv_estimate * 1000];\n});\n"
-                    },
-                    {
-                      "entity": "sensor.solcast_forecast_tomorrow",
-                      "name": "Zajtra (optimist.)",
-                      "type": "line",
-                      "color": "#4CAF50",
-                      "stroke_width": 1,
-                      "opacity": 0.5,
-                      "float_precision": 0,
-                      "stroke_dash": 4,
-                      "data_generator": "return entity.attributes.detailedForecast.map((entry) => {\n  return [new Date(entry.period_start).getTime(), entry.pv_estimate90 * 1000];\n});\n"
-                    },
-                    {
-                      "entity": "sensor.solcast_forecast_tomorrow",
-                      "name": "Zajtra (pesimist.)",
-                      "type": "line",
-                      "color": "#F44336",
-                      "stroke_width": 1,
-                      "opacity": 0.5,
-                      "float_precision": 0,
-                      "stroke_dash": 4,
-                      "data_generator": "return entity.attributes.detailedForecast.map((entry) => {\n  return [new Date(entry.period_start).getTime(), entry.pv_estimate10 * 1000];\n});\n"
-                    },
-                    {
-                      "entity": "sensor.pv_power",
-                      "name": "Reálna výroba",
-                      "type": "line",
-                      "color": "#4CAF50",
-                      "stroke_width": 3
-                    }
-                  ],
-                  "grid_options": {
-                    "columns": "full",
-                    "rows": 5
-                  }
-                }
-              ]
-            },
-            {
-              "type": "grid",
-              "column_span": 2,
-              "cards": [
-                {
-                  "type": "heading",
-                  "heading": "🧠 Smart rozhodnutia",
-                  "heading_style": "title",
-                  "icon": "mdi:brain"
-                },
-                {
-                  "type": "tile",
-                  "entity": "binary_sensor.solar_ev_nabijat_v_noci",
-                  "name": "EV nabíjať v noci?",
-                  "grid_options": {
-                    "columns": 6,
-                    "rows": 2
-                  }
-                },
-                {
-                  "type": "tile",
-                  "entity": "binary_sensor.solar_bojler_ohriat_v_noci",
-                  "name": "Bojler ohriať v noci?",
-                  "grid_options": {
-                    "columns": 6,
-                    "rows": 2
-                  }
-                },
-                {
-                  "type": "markdown",
-                  "content": "{% set ev = is_state('binary_sensor.solar_ev_nabijat_v_noci', 'on') %} {% set bojler = is_state('binary_sensor.solar_bojler_ohriat_v_noci', 'on') %} {% set forecast = states('sensor.solar_forecast_tomorrow') | float(0) %} {% set rating = states('sensor.solar_forecast_tomorrow_rating') %} {% set soc = states('sensor.mysan_battery_level') | float(0) %}\n**Predpoveď zajtra:** {{ forecast }} kWh ({{ rating }}) **EV SOC:** {{ soc }}%\n{% if ev %} 🔌 **EV:** Nabíjaj cez noc pri T1 — málo slnka zajtra {% else %} ☀️ **EV:** Počkaj na prebytky — dosť energie zajtra {% endif %}\n{% if bojler %} 🔥 **Bojler:** Ohrej v noci pri T1 {% else %} ☀️ **Bojler:** Prebytky zajtra postačia {% endif %}\n",
-                  "grid_options": {
-                    "columns": "full"
-                  }
-                },
-                {
-                  "type": "tile",
-                  "entity": "sensor.mysan_nominal_soc_nissan_leaf",
-                  "name": "EV SOC",
-                  "icon": "mdi:car-battery",
-                  "color": "green",
-                  "vertical": false,
-                  "features_position": "bottom"
-                },
-                {
-                  "type": "tile",
-                  "entity": "sensor.hacharger_status_connector",
-                  "name": "Nabíjačka",
-                  "icon": "mdi:ev-station"
-                },
-                {
-                  "type": "tile",
-                  "entity": "climate.drazitherm",
-                  "name": "Bojler Dražice",
-                  "icon": "mdi:water-boiler"
-                }
-              ]
-            },
-            {
-              "type": "grid",
-              "column_span": 2,
-              "cards": [
-                {
-                  "type": "heading",
-                  "heading": "⚙️ Nastavenia predpovede",
-                  "heading_style": "title",
-                  "icon": "mdi:cog"
-                },
-                {
-                  "type": "tile",
-                  "entity": "input_select.solar_forecast_source",
-                  "name": "Zdroj predpovede",
-                  "icon": "mdi:swap-horizontal",
-                  "grid_options": {
-                    "columns": "full"
-                  }
-                },
-                {
-                  "type": "tile",
-                  "entity": "input_boolean.solar_forecast_ev_enabled",
-                  "name": "Smart EV nabíjanie",
-                  "icon": "mdi:car-electric-outline",
-                  "grid_options": {
-                    "columns": 6
-                  }
-                },
-                {
-                  "type": "tile",
-                  "entity": "input_boolean.solar_forecast_bojler_enabled",
-                  "name": "Smart bojler",
-                  "icon": "mdi:water-boiler",
-                  "grid_options": {
-                    "columns": 6
-                  }
-                },
-                {
-                  "type": "entities",
-                  "title": "🔌 EV prah",
-                  "entities": [
-                    {
-                      "entity": "input_number.solar_forecast_ev_threshold",
-                      "name": "Min. kWh zajtra pre skip nočného nabíjania"
-                    }
-                  ],
-                  "show_header_toggle": false
-                },
-                {
-                  "type": "entities",
-                  "title": "🔥 Bojler prah",
-                  "entities": [
-                    {
-                      "entity": "input_number.solar_forecast_bojler_threshold",
-                      "name": "Min. kWh zajtra pre skip nočného ohrevu"
-                    }
-                  ],
-                  "show_header_toggle": false
-                },
-                {
-                  "type": "markdown",
-                  "content": "### 📡 Solcast API\nPosledný update: {{ states('sensor.solcast_api_last_polled') | as_timestamp | timestamp_custom('%d.%m. %H:%M', true) | default('N/A') }}\nAPI volania: {{ states('sensor.solcast_api_used') | default('?') }} / {{ states('sensor.solcast_api_limit') | default('10') }}\nĎalší auto-update: {{ state_attr('sensor.solcast_api_last_polled', 'next_auto_update') | as_timestamp | timestamp_custom('%d.%m. %H:%M', true) | default('N/A') }}\n",
-                  "grid_options": {
-                    "columns": "full"
-                  }
-                }
-              ]
-            },
-            {
-              "type": "grid",
-              "column_span": 2,
-              "cards": [
-                {
-                  "type": "heading",
-                  "heading": "🌤️ Počasie",
-                  "heading_style": "title",
-                  "icon": "mdi:weather-partly-cloudy"
-                },
-                {
-                  "type": "weather-forecast",
-                  "entity": "weather.forecast_home",
-                  "show_forecast": true,
-                  "forecast_type": "daily",
-                  "grid_options": {
-                    "columns": "full",
-                    "rows": 4
-                  }
-                },
-                {
-                  "type": "tile",
-                  "entity": "sensor.electricity_maps_grid_fossil_fuel_percentage",
-                  "name": "Fosílne palivá v sieti",
-                  "icon": "mdi:factory"
-                }
-              ]
+              "show_name": false,
+              "show_state": true,
+              "show_icon": true,
+              "entity": "switch.pw_outdoor_ldl"
             }
           ]
         },
@@ -2290,6 +1633,868 @@
           ]
         },
         {
+          "type": "sections",
+          "max_columns": 4,
+          "title": "Svetla",
+          "path": "svetla",
+          "icon": "mdi:lightbulb-on",
+          "sections": [
+            {
+              "type": "grid",
+              "cards": [
+                {
+                  "type": "heading",
+                  "icon": "mdi:pine-tree",
+                  "heading_style": "subtitle",
+                  "heading": "Vianončné"
+                },
+                {
+                  "type": "tile",
+                  "entity": "switch.pw_seda",
+                  "name": "Vian. stromček",
+                  "icon": "mdi:pine-tree-variant-outline",
+                  "vertical": false,
+                  "features_position": "bottom"
+                },
+                {
+                  "type": "tile",
+                  "entity": "switch.pw_outdor_ldl",
+                  "name": "Pred domom",
+                  "icon": "mdi:tree",
+                  "vertical": false,
+                  "features_position": "bottom"
+                }
+              ],
+              "column_span": 1
+            },
+            {
+              "type": "grid",
+              "cards": [
+                {
+                  "type": "tile",
+                  "entity": "light.led_ccww_controller",
+                  "name": "LED akvárium",
+                  "show_entity_picture": false,
+                  "hide_state": false,
+                  "vertical": false,
+                  "features": [
+                    {
+                      "type": "toggle"
+                    },
+                    {
+                      "type": "light-brightness"
+                    },
+                    {
+                      "type": "light-color-temp"
+                    }
+                  ],
+                  "features_position": "bottom",
+                  "grid_options": {
+                    "columns": "full"
+                  }
+                },
+                {
+                  "type": "heading",
+                  "icon": "",
+                  "heading_style": "subtitle"
+                },
+                {
+                  "type": "tile",
+                  "entity": "light.led_kuchyna_all",
+                  "state_content": [
+                    "brightness",
+                    "color_temp_kelvin",
+                    "color_temp"
+                  ],
+                  "vertical": false,
+                  "features": [
+                    {
+                      "type": "toggle"
+                    },
+                    {
+                      "type": "light-brightness"
+                    },
+                    {
+                      "type": "light-color-temp"
+                    }
+                  ],
+                  "features_position": "bottom"
+                },
+                {
+                  "type": "tile",
+                  "entity": "light.bulb_e27_stolna",
+                  "name": "LED hosťovská",
+                  "vertical": false,
+                  "features": [
+                    {
+                      "type": "toggle"
+                    },
+                    {
+                      "type": "light-brightness"
+                    },
+                    {
+                      "type": "light-color-temp"
+                    }
+                  ],
+                  "features_position": "bottom"
+                },
+                {
+                  "type": "heading",
+                  "icon": "mdi:desk",
+                  "heading_style": "subtitle"
+                },
+                {
+                  "type": "tile",
+                  "entity": "light.led_pracovna_all",
+                  "show_entity_picture": false,
+                  "hide_state": false,
+                  "state_content": [
+                    "state",
+                    "brightness"
+                  ],
+                  "vertical": false,
+                  "features": [
+                    {
+                      "type": "toggle"
+                    },
+                    {
+                      "type": "light-brightness"
+                    }
+                  ],
+                  "features_position": "bottom",
+                  "grid_options": {
+                    "columns": "full",
+                    "rows": 3
+                  }
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "cards": [
+                {
+                  "type": "entities",
+                  "entities": [
+                    {
+                      "entity": "light.detska_pri_dverach"
+                    },
+                    {
+                      "entity": "light.detska_pri_okne"
+                    },
+                    {
+                      "entity": "light.kuchyna_1"
+                    },
+                    {
+                      "entity": "light.kuchyna_2"
+                    },
+                    {
+                      "entity": "light.kuchyna_3"
+                    },
+                    {
+                      "entity": "light.lampicka"
+                    },
+                    {
+                      "entity": "light.spalna"
+                    },
+                    {
+                      "entity": "light.bulb_e27_stolna"
+                    },
+                    {
+                      "entity": "light.led_office_1"
+                    },
+                    {
+                      "entity": "light.led_office_2"
+                    },
+                    {
+                      "entity": "light.led_office_3"
+                    },
+                    {
+                      "entity": "light.led_ccww_controller",
+                      "name": "Akvarium LED",
+                      "icon": "mdi:fishbowl-outline"
+                    }
+                  ],
+                  "title": "Light"
+                }
+              ]
+            }
+          ],
+          "cards": [],
+          "header": {}
+        },
+        {
+          "type": "sections",
+          "max_columns": 4,
+          "title": "Zaluzie",
+          "path": "zaluzie",
+          "icon": "mdi:blinds-horizontal",
+          "sections": [
+            {
+              "type": "grid",
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "New section"
+                },
+                {
+                  "type": "tile",
+                  "entity": "cover.zaluz_rano",
+                  "vertical": false,
+                  "features_position": "bottom",
+                  "features": [
+                    {
+                      "type": "cover-open-close"
+                    }
+                  ]
+                },
+                {
+                  "type": "tile",
+                  "entity": "cover.zaluz_vychod",
+                  "vertical": false,
+                  "features_position": "bottom",
+                  "features": [
+                    {
+                      "type": "cover-open-close"
+                    },
+                    {
+                      "type": "cover-tilt-position"
+                    }
+                  ]
+                },
+                {
+                  "type": "tile",
+                  "entity": "cover.zaluz_fajciarska_noc",
+                  "vertical": false,
+                  "features_position": "bottom",
+                  "features": [
+                    {
+                      "type": "cover-open-close"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "New section"
+                },
+                {
+                  "type": "entities",
+                  "entities": [
+                    {
+                      "entity": "cover.detska_1l"
+                    },
+                    {
+                      "entity": "cover.detska_1p"
+                    },
+                    {
+                      "entity": "cover.herna_l"
+                    },
+                    {
+                      "entity": "cover.herna_p"
+                    },
+                    {
+                      "entity": "cover.hostovska_l"
+                    },
+                    {
+                      "entity": "cover.hostovska_p"
+                    },
+                    {
+                      "entity": "cover.obyvacka_1"
+                    },
+                    {
+                      "entity": "cover.obyvacka_2"
+                    },
+                    {
+                      "entity": "cover.obyvacka_3"
+                    },
+                    {
+                      "entity": "cover.obyvacka_4"
+                    },
+                    {
+                      "entity": "cover.obyvacka_5"
+                    },
+                    {
+                      "entity": "cover.obyvacka_6"
+                    },
+                    {
+                      "entity": "cover.pracovna_1"
+                    },
+                    {
+                      "entity": "cover.pracovna_2"
+                    },
+                    {
+                      "entity": "cover.spalna_1"
+                    },
+                    {
+                      "entity": "cover.spalna_2"
+                    },
+                    {
+                      "entity": "cover.spalna_3"
+                    },
+                    {
+                      "entity": "cover.spalna_4"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "masonry",
+          "path": "hvac",
+          "subview": false,
+          "title": "HVAC",
+          "cards": [
+            {
+              "type": "vertical-stack",
+              "cards": [
+                {
+                  "type": "markdown",
+                  "content": "## 🌡️ Teplota, vlhkosť a batéria"
+                },
+                {
+                  "type": "vertical-stack",
+                  "cards": [
+                    {
+                      "type": "markdown",
+                      "content": "### Hosťovská",
+                      "text_only": true
+                    },
+                    {
+                      "type": "horizontal-stack",
+                      "cards": [
+                        {
+                          "type": "gauge",
+                          "entity": "sensor.wifi_smart_switch_temperature",
+                          "name": "Teplota",
+                          "min": 10,
+                          "max": 35,
+                          "severity": {
+                            "green": 18,
+                            "yellow": 26,
+                            "red": 30
+                          }
+                        },
+                        {
+                          "type": "sensor",
+                          "entity": "sensor.wifi_smart_switch_humidity",
+                          "graph": "line",
+                          "detail": 1,
+                          "name": {
+                            "type": "entity"
+                          }
+                        },
+                        {
+                          "type": "tile",
+                          "entity": "sensor.wifi_smart_switch_carbon_dioxide",
+                          "name": "CO2",
+                          "show_entity_picture": false,
+                          "vertical": true
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "vertical-stack",
+                  "cards": [
+                    {
+                      "type": "markdown",
+                      "content": "### Klavir (Sonoff SNZB-02WD)",
+                      "text_only": true
+                    },
+                    {
+                      "type": "horizontal-stack",
+                      "cards": [
+                        {
+                          "type": "gauge",
+                          "entity": "sensor.sonoff_teplomer_wp_temperature",
+                          "name": "Teplota",
+                          "min": 10,
+                          "max": 35,
+                          "severity": {
+                            "green": 18,
+                            "yellow": 26,
+                            "red": 30
+                          }
+                        },
+                        {
+                          "type": "sensor",
+                          "entity": "sensor.sonoff_teplomer_wp_humidity",
+                          "graph": "line",
+                          "detail": 1,
+                          "name": {
+                            "type": "entity"
+                          }
+                        },
+                        {
+                          "type": "tile",
+                          "entity": "sensor.sonoff_teplomer_wp_battery",
+                          "name": "Batéria",
+                          "show_entity_picture": false,
+                          "vertical": true
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "vertical-stack",
+                  "cards": [
+                    {
+                      "type": "markdown",
+                      "content": "### Outdoor",
+                      "text_only": true
+                    },
+                    {
+                      "type": "horizontal-stack",
+                      "cards": [
+                        {
+                          "type": "gauge",
+                          "entity": "sensor.teplomer_outdoor_temperature",
+                          "name": "Teplota",
+                          "min": -20,
+                          "max": 45,
+                          "severity": {
+                            "green": 5,
+                            "yellow": 28,
+                            "red": 33
+                          }
+                        },
+                        {
+                          "type": "sensor",
+                          "entity": "sensor.teplomer_outdoor_humidity",
+                          "graph": "line",
+                          "detail": 1,
+                          "name": {
+                            "type": "entity"
+                          }
+                        },
+                        {
+                          "type": "tile",
+                          "entity": "sensor.teplomer_outdoor_battery",
+                          "name": "Batéria",
+                          "show_entity_picture": false,
+                          "vertical": true
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "vertical-stack",
+                  "cards": [
+                    {
+                      "type": "markdown",
+                      "content": "### Technická (TZ-P3-L_FA)",
+                      "text_only": true
+                    },
+                    {
+                      "type": "horizontal-stack",
+                      "cards": [
+                        {
+                          "type": "gauge",
+                          "entity": "sensor.teplomer_bez_tz_p3_l_fa_temperature",
+                          "name": "Teplota",
+                          "min": 10,
+                          "max": 35,
+                          "severity": {
+                            "green": 18,
+                            "yellow": 26,
+                            "red": 30
+                          }
+                        },
+                        {
+                          "type": "sensor",
+                          "entity": "sensor.teplomer_bez_tz_p3_l_fa_humidity",
+                          "graph": "line",
+                          "detail": 1,
+                          "name": {
+                            "type": "entity"
+                          }
+                        },
+                        {
+                          "type": "tile",
+                          "entity": "sensor.teplomer_bez_tz_p3_l_fa_battery",
+                          "name": "Batéria",
+                          "show_entity_picture": false,
+                          "vertical": true
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "vertical-stack",
+                  "cards": [
+                    {
+                      "type": "markdown",
+                      "content": "### Motion",
+                      "text_only": true
+                    },
+                    {
+                      "type": "horizontal-stack",
+                      "cards": [
+                        {
+                          "type": "gauge",
+                          "entity": "sensor.motionsensor_temperature",
+                          "name": "Teplota",
+                          "min": 10,
+                          "max": 35,
+                          "severity": {
+                            "green": 18,
+                            "yellow": 26,
+                            "red": 30
+                          }
+                        },
+                        {
+                          "type": "sensor",
+                          "entity": "sensor.motionsensor_humidity",
+                          "graph": "line",
+                          "detail": 1,
+                          "name": {
+                            "type": "entity"
+                          }
+                        },
+                        {
+                          "type": "tile",
+                          "entity": "sensor.motionsensor_battery",
+                          "name": "Batéria",
+                          "show_entity_picture": false,
+                          "vertical": true
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "tile",
+              "entity": "switch.klima_cojirbfaaai_power_switch",
+              "name": "Klimatizacia ON/OFF",
+              "icon": "mdi:air-conditioner",
+              "show_entity_picture": false,
+              "vertical": false,
+              "features": [
+                {
+                  "type": "toggle"
+                }
+              ],
+              "features_position": "bottom"
+            },
+            {
+              "type": "vertical-stack",
+              "cards": [
+                {
+                  "type": "markdown",
+                  "content": "## 💨 Vetranie\n{% set s = states('input_number.vetranie_stupen') | int %} **Stupeň: {{ s }}**  &nbsp;|&nbsp;  Napätie: **{{ s + 1 }} V**\n"
+                },
+                {
+                  "type": "custom:button-card",
+                  "entity": "input_number.vetranie_stupen",
+                  "show_name": false,
+                  "show_icon": false,
+                  "show_state": false,
+                  "styles": {
+                    "card": [
+                      {
+                        "padding": "8px"
+                      }
+                    ]
+                  },
+                  "custom_fields": {
+                    "steps": "[[[\n  const stupen = parseInt(entity.state);\n  const boxy = Array.from({length: 9}, (_, i) => {\n    const active = i <= stupen;\n    const color = active ? `hsl(${200 - i*15}, 80%, 45%)` : '#444';\n    return `<div style=\"width:26px;height:26px;border-radius:4px;background:${color};\n              display:flex;align-items:center;justify-content:center;\n              color:white;font-size:11px;font-weight:bold\">${i}</div>`;\n  });\n  return '<div style=\"display:flex;gap:6px;justify-content:center;padding:4px 0\">' + boxy.join('') + '</div>';\n]]]\n"
+                  },
+                  "card_mod": {
+                    "style": ":host { --ha-card-border-radius: 12px; }\n"
+                  }
+                },
+                {
+                  "type": "horizontal-stack",
+                  "cards": [
+                    {
+                      "type": "button",
+                      "name": "",
+                      "icon": "mdi:minus",
+                      "tap_action": {
+                        "action": "call-service",
+                        "service": "script.vetranie_stupen_dole"
+                      },
+                      "hold_action": {
+                        "action": "call-service",
+                        "service": "script.vetranie_stupen_dole"
+                      },
+                      "styles": {
+                        "card": [
+                          {
+                            "height": "60px"
+                          }
+                        ]
+                      },
+                      "card_mod": {
+                        "style": "ha-card { border-radius: 12px; }\n"
+                      }
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_number.vetranie_stupen",
+                      "name": "Stupeň",
+                      "icon": "none"
+                    },
+                    {
+                      "type": "button",
+                      "name": "",
+                      "icon": "mdi:plus",
+                      "tap_action": {
+                        "action": "call-service",
+                        "service": "script.vetranie_stupen_hore"
+                      },
+                      "hold_action": {
+                        "action": "call-service",
+                        "service": "script.vetranie_stupen_hore"
+                      },
+                      "styles": {
+                        "card": [
+                          {
+                            "height": "60px"
+                          }
+                        ]
+                      },
+                      "card_mod": {
+                        "style": "ha-card { border-radius: 12px; }\n"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "square": false,
+              "columns": 1,
+              "cards": [
+                {
+                  "type": "entities",
+                  "entities": [
+                    {
+                      "entity": "switch.klima_cojirbfaaai_8_degc_heating",
+                      "name": "8 °C Heating"
+                    },
+                    {
+                      "entity": "switch.klima_cojirbfaaai_beep_mode_switch",
+                      "name": "Beep Mode Switch"
+                    },
+                    {
+                      "entity": "switch.klima_cojirbfaaai_diplay_light_switch",
+                      "name": "Diplay Light Switch"
+                    },
+                    {
+                      "entity": "switch.klima_cojirbfaaai_drying_switch",
+                      "name": "Drying Switch"
+                    },
+                    {
+                      "entity": "switch.klima_cojirbfaaai_eco_switch",
+                      "name": "ECO Switch"
+                    },
+                    {
+                      "entity": "select.klima_cojirbfaaai_generator_mode",
+                      "name": "Generator Mode"
+                    },
+                    {
+                      "entity": "select.klima_cojirbfaaai_mode",
+                      "name": "Mode"
+                    },
+                    {
+                      "entity": "switch.klima_cojirbfaaai_power_switch",
+                      "name": "Power Switch"
+                    },
+                    {
+                      "entity": "switch.klima_cojirbfaaai_healthy_switch",
+                      "name": "Healthy Switch"
+                    },
+                    {
+                      "entity": "number.klima_cojirbfaaai_set_target_temperature",
+                      "name": "Set Target Temperature"
+                    },
+                    {
+                      "entity": "select.klima_cojirbfaaai_left_and_right_air_supply",
+                      "name": "Left and Right air supply"
+                    },
+                    {
+                      "entity": "select.klima_cojirbfaaai_up_and_down_air_supply",
+                      "name": "Up and Down air supply"
+                    },
+                    {
+                      "entity": "select.klima_cojirbfaaai_wind_speed",
+                      "name": "Wind Speed"
+                    },
+                    {
+                      "entity": "switch.klima_cojirbfaaai_soft_wind",
+                      "name": "Soft Wind"
+                    },
+                    {
+                      "entity": "select.klima_cojirbfaaai_sleep_mode",
+                      "name": "Sleep Mode"
+                    },
+                    {
+                      "entity": "button.klima_cojirbfaaai_start_evaporator_cleaning",
+                      "name": "Start Evaporator Cleaning"
+                    }
+                  ],
+                  "title": "Klima (CoJIRBFAAAI)"
+                },
+                {
+                  "type": "thermostat",
+                  "entity": "climate.klima_cojirbfaaai_climate",
+                  "features": [
+                    {
+                      "type": "climate-hvac-modes",
+                      "hvac_modes": [
+                        "cool",
+                        "heat",
+                        "dry",
+                        "fan_only",
+                        "auto",
+                        "off"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "entities",
+              "entities": [
+                {
+                  "entity": "sensor.klima_cojirbfaaai_current_temperature",
+                  "name": "Current Temperature"
+                },
+                {
+                  "entity": "binary_sensor.klima_cojirbfaaai_is_online",
+                  "name": "Is Online"
+                },
+                {
+                  "entity": "sensor.klima_cojirbfaaai_today_energy_consumption",
+                  "name": "Today Energy Consumption"
+                },
+                {
+                  "entity": "sensor.klima_cojirbfaaai_today_work_time",
+                  "name": "Today Work Time"
+                },
+                {
+                  "entity": "sensor.klima_cojirbfaaai_yesterday_energy_consumption",
+                  "name": "Yesterday Energy Consumption"
+                },
+                {
+                  "entity": "sensor.klima_cojirbfaaai_yesterday_work_time",
+                  "name": "Yesterday Work Time"
+                }
+              ],
+              "title": "Klima (CoJIRBFAAAI)"
+            },
+            {
+              "type": "light",
+              "entity": "light.dimdc_vetranie1",
+              "icon": "mdi:fan"
+            },
+            {
+              "type": "vertical-stack",
+              "cards": [
+                {
+                  "type": "markdown",
+                  "content": "## 🌡️ Klimatizácia - Tarifné riadenie\n{% if is_state('input_boolean.klima_manual_override', 'on') %}\n⚠️ **Manuálny režim aktívny** - automatizácia pozastavená\n{% elif is_state('input_boolean.klima_was_on_before_shutoff', 'on') %}\n⏳ **Čaká na obnovenie** po skončení {{ states('sensor.aktualna_tarifa') }}\n{% endif %}\n"
+                },
+                {
+                  "type": "entities",
+                  "entities": [
+                    {
+                      "entity": "switch.klima_cojirbfaaai_power_switch",
+                      "name": "Klimatizácia",
+                      "icon": "mdi:air-conditioner"
+                    },
+                    {
+                      "type": "divider"
+                    },
+                    {
+                      "entity": "input_boolean.klima_automation_enabled",
+                      "name": "Automatizácia aktívna"
+                    },
+                    {
+                      "entity": "input_boolean.klima_manual_override",
+                      "name": "Manuálny režim"
+                    },
+                    {
+                      "type": "divider"
+                    },
+                    {
+                      "type": "section",
+                      "label": "Povoliť v tarifách"
+                    },
+                    {
+                      "entity": "input_boolean.klima_enable_t1",
+                      "name": "T1 - Noc",
+                      "secondary_info": "22:00 - 06:00"
+                    },
+                    {
+                      "entity": "input_boolean.klima_enable_t2",
+                      "name": "T2 - Popoludnie",
+                      "secondary_info": "13:00 - 19:00"
+                    },
+                    {
+                      "entity": "input_boolean.klima_enable_t3",
+                      "name": "T3 - Predpoludnie",
+                      "secondary_info": "09:00 - 13:00"
+                    },
+                    {
+                      "entity": "input_boolean.klima_enable_t4",
+                      "name": "T4 - Ráno/Večer",
+                      "secondary_info": "06:00-09:00 + 19:00-22:00"
+                    }
+                  ],
+                  "title": "Nastavenia"
+                },
+                {
+                  "type": "conditional",
+                  "conditions": [
+                    {
+                      "condition": "state",
+                      "entity": "input_boolean.klima_automation_enabled",
+                      "state": "on"
+                    }
+                  ],
+                  "card": {
+                    "type": "glance",
+                    "entities": [
+                      {
+                        "entity": "sensor.aktualna_tarifa",
+                        "name": "Aktuálna"
+                      },
+                      {
+                        "entity": "binary_sensor.t4_aktivna",
+                        "name": "T4 (drahá)"
+                      },
+                      {
+                        "entity": "input_boolean.klima_was_on_before_shutoff",
+                        "name": "Čaká"
+                      }
+                    ],
+                    "show_state": true,
+                    "title": "Stav systému"
+                  }
+                }
+              ]
+            }
+          ],
+          "icon": "mdi:sun-thermometer-outline",
+          "show_icon_and_title": true
+        },
+        {
           "path": "bojlery",
           "title": "Bojlery",
           "icon": "mdi:water-boiler",
@@ -2662,642 +2867,838 @@
           ]
         },
         {
-          "type": "masonry",
-          "path": "hvac",
-          "subview": false,
-          "title": "HVAC",
-          "cards": [
-            {
-              "type": "entities",
-              "entities": [
-                {
-                  "entity": "sensor.klima_cojirbfaaai_current_temperature",
-                  "name": "Current Temperature"
-                },
-                {
-                  "entity": "binary_sensor.klima_cojirbfaaai_is_online",
-                  "name": "Is Online"
-                },
-                {
-                  "entity": "sensor.klima_cojirbfaaai_today_energy_consumption",
-                  "name": "Today Energy Consumption"
-                },
-                {
-                  "entity": "sensor.klima_cojirbfaaai_today_work_time",
-                  "name": "Today Work Time"
-                },
-                {
-                  "entity": "sensor.klima_cojirbfaaai_yesterday_energy_consumption",
-                  "name": "Yesterday Energy Consumption"
-                },
-                {
-                  "entity": "sensor.klima_cojirbfaaai_yesterday_work_time",
-                  "name": "Yesterday Work Time"
-                }
-              ],
-              "title": "Klima (CoJIRBFAAAI)"
-            },
+          "title": "FVE",
+          "path": "fve",
+          "icon": "mdi:solar-power-variant-outline",
+          "type": "sections",
+          "max_columns": 4,
+          "sections": [
             {
               "type": "grid",
-              "square": false,
-              "columns": 1,
+              "column_span": 2,
               "cards": [
                 {
-                  "type": "entities",
-                  "entities": [
-                    {
-                      "entity": "switch.klima_cojirbfaaai_8_degc_heating",
-                      "name": "8 °C Heating"
-                    },
-                    {
-                      "entity": "switch.klima_cojirbfaaai_beep_mode_switch",
-                      "name": "Beep Mode Switch"
-                    },
-                    {
-                      "entity": "switch.klima_cojirbfaaai_diplay_light_switch",
-                      "name": "Diplay Light Switch"
-                    },
-                    {
-                      "entity": "switch.klima_cojirbfaaai_drying_switch",
-                      "name": "Drying Switch"
-                    },
-                    {
-                      "entity": "switch.klima_cojirbfaaai_eco_switch",
-                      "name": "ECO Switch"
-                    },
-                    {
-                      "entity": "select.klima_cojirbfaaai_generator_mode",
-                      "name": "Generator Mode"
-                    },
-                    {
-                      "entity": "select.klima_cojirbfaaai_mode",
-                      "name": "Mode"
-                    },
-                    {
-                      "entity": "switch.klima_cojirbfaaai_power_switch",
-                      "name": "Power Switch"
-                    },
-                    {
-                      "entity": "switch.klima_cojirbfaaai_healthy_switch",
-                      "name": "Healthy Switch"
-                    },
-                    {
-                      "entity": "number.klima_cojirbfaaai_set_target_temperature",
-                      "name": "Set Target Temperature"
-                    },
-                    {
-                      "entity": "select.klima_cojirbfaaai_left_and_right_air_supply",
-                      "name": "Left and Right air supply"
-                    },
-                    {
-                      "entity": "select.klima_cojirbfaaai_up_and_down_air_supply",
-                      "name": "Up and Down air supply"
-                    },
-                    {
-                      "entity": "select.klima_cojirbfaaai_wind_speed",
-                      "name": "Wind Speed"
-                    },
-                    {
-                      "entity": "switch.klima_cojirbfaaai_soft_wind",
-                      "name": "Soft Wind"
-                    },
-                    {
-                      "entity": "select.klima_cojirbfaaai_sleep_mode",
-                      "name": "Sleep Mode"
-                    },
-                    {
-                      "entity": "button.klima_cojirbfaaai_start_evaporator_cleaning",
-                      "name": "Start Evaporator Cleaning"
-                    }
-                  ],
-                  "title": "Klima (CoJIRBFAAAI)"
+                  "type": "heading",
+                  "heading": "☀️ Aktuálna výroba",
+                  "heading_style": "title",
+                  "icon": "mdi:solar-power"
                 },
                 {
-                  "type": "thermostat",
-                  "entity": "climate.klima_cojirbfaaai_climate",
-                  "features": [
+                  "type": "tile",
+                  "entity": "sensor.pv_power",
+                  "name": "PV výkon",
+                  "icon": "mdi:solar-power",
+                  "color": "amber",
+                  "grid_options": {
+                    "columns": 6,
+                    "rows": 2
+                  }
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.active_power",
+                  "name": "Prebytky / Grid",
+                  "icon": "mdi:transmission-tower",
+                  "color": "green",
+                  "grid_options": {
+                    "columns": 6,
+                    "rows": 2
+                  }
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.house_consumption",
+                  "name": "Spotreba domu",
+                  "icon": "mdi:home-lightning-bolt",
+                  "color": "red"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.today_s_pv_generation",
+                  "name": "Výroba dnes",
+                  "icon": "mdi:counter",
+                  "color": "orange"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.meter_active_power_total",
+                  "name": "Meter power",
+                  "icon": "mdi:meter-electric"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.aktualna_tarifa",
+                  "name": "Tarifa",
+                  "icon": "mdi:flash"
+                },
+                {
+                  "type": "history-graph",
+                  "entities": [
                     {
-                      "type": "climate-hvac-modes",
-                      "hvac_modes": [
-                        "cool",
-                        "heat",
-                        "dry",
-                        "fan_only",
-                        "auto",
-                        "off"
-                      ]
+                      "entity": "sensor.pv_power",
+                      "name": "PV výkon"
+                    },
+                    {
+                      "entity": "sensor.active_power",
+                      "name": "Prebytky"
+                    },
+                    {
+                      "entity": "sensor.house_consumption",
+                      "name": "Spotreba"
                     }
-                  ]
+                  ],
+                  "hours_to_show": 24,
+                  "grid_options": {
+                    "columns": "full",
+                    "rows": 4
+                  }
                 }
               ]
             },
             {
-              "type": "vertical-stack",
+              "type": "grid",
+              "column_span": 2,
               "cards": [
                 {
+                  "type": "heading",
+                  "heading": "📊 Energia & štatistiky",
+                  "heading_style": "title",
+                  "icon": "mdi:chart-bar"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.meter_total_energy_export",
+                  "name": "Export celkom",
+                  "icon": "mdi:transmission-tower-export",
+                  "color": "green"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.meter_total_energy_import",
+                  "name": "Import celkom",
+                  "icon": "mdi:transmission-tower-import",
+                  "color": "red"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.total_pv_generation",
+                  "name": "Výroba celkom",
+                  "icon": "mdi:chart-line",
+                  "color": "amber"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.total_battery_charge",
+                  "name": "Batéria nabité",
+                  "icon": "mdi:battery-charging",
+                  "color": "blue"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.total_battery_discharge",
+                  "name": "Batéria vybité",
+                  "icon": "mdi:battery-arrow-down",
+                  "color": "orange"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.electricity_maps_co2_intensity",
+                  "name": "CO₂ intenzita",
+                  "icon": "mdi:molecule-co2"
+                },
+                {
+                  "type": "energy-distribution",
+                  "link_dashboard": true,
+                  "grid_options": {
+                    "columns": "full",
+                    "rows": 4
+                  }
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "column_span": 2,
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "🔮 Predpoveď výroby",
+                  "heading_style": "title",
+                  "icon": "mdi:crystal-ball"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.solar_forecast_today",
+                  "name": "Predpoveď dnes",
+                  "icon": "mdi:solar-power",
+                  "color": "amber",
+                  "grid_options": {
+                    "columns": 4
+                  }
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.solar_forecast_remaining_today",
+                  "name": "Zostáva dnes",
+                  "icon": "mdi:solar-panel",
+                  "color": "orange",
+                  "grid_options": {
+                    "columns": 4
+                  }
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.solar_forecast_tomorrow",
+                  "name": "Predpoveď zajtra",
+                  "icon": "mdi:solar-power-variant",
+                  "color": "deep-orange",
+                  "grid_options": {
+                    "columns": 4
+                  }
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.solar_forecast_now",
+                  "name": "Odhad teraz",
+                  "icon": "mdi:white-balance-sunny"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.solar_forecast_next_hour",
+                  "name": "Ďalšia hodina",
+                  "icon": "mdi:clock-fast"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.solar_peak_today",
+                  "name": "Špička dnes",
+                  "icon": "mdi:chart-bell-curve"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.solar_peak_tomorrow",
+                  "name": "Špička zajtra",
+                  "icon": "mdi:chart-bell-curve-cumulative"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.solar_forecast_tomorrow_rating",
+                  "name": "Hodnotenie zajtra",
+                  "grid_options": {
+                    "columns": "full"
+                  }
+                },
+                {
                   "type": "markdown",
-                  "content": "## 🌡️ Klimatizácia - Tarifné riadenie\n{% if is_state('input_boolean.klima_manual_override', 'on') %}\n⚠️ **Manuálny režim aktívny** - automatizácia pozastavená\n{% elif is_state('input_boolean.klima_was_on_before_shutoff', 'on') %}\n⏳ **Čaká na obnovenie** po skončení {{ states('sensor.aktualna_tarifa') }}\n{% endif %}\n"
+                  "content": "### Predpoveď vs realita\n| | Hodnota | |---|---| | 🔮 Predpoveď dnes | {{ states('sensor.solar_forecast_today') }} kWh | | ☀️ Reálna výroba | {{ states('sensor.today_s_pv_generation') }} kWh | | 📉 Zostáva | {{ states('sensor.solar_forecast_remaining_today') }} kWh | | 🔮 Predpoveď zajtra | {{ states('sensor.solar_forecast_tomorrow') }} kWh | | ⚡ Špička zajtra | {{ states('sensor.solar_peak_tomorrow') }} W | | 📡 Zdroj | {{ states('input_select.solar_forecast_source') }} |\n",
+                  "grid_options": {
+                    "columns": "full"
+                  }
+                },
+                {
+                  "type": "energy-solar-graph",
+                  "grid_options": {
+                    "columns": "full",
+                    "rows": 7
+                  }
+                },
+                {
+                  "type": "custom:apexcharts-card",
+                  "header": {
+                    "title": "☀️ Predpoveď 48h (dnes + zajtra)",
+                    "show": true
+                  },
+                  "graph_span": "2d",
+                  "span": {
+                    "start": "day"
+                  },
+                  "apex_config": {
+                    "chart": {
+                      "height": 350
+                    },
+                    "legend": {
+                      "show": true,
+                      "position": "top"
+                    },
+                    "tooltip": {
+                      "x": {
+                        "format": "dd.MM HH:mm"
+                      }
+                    },
+                    "xaxis": {
+                      "labels": {
+                        "format": "HH:mm",
+                        "datetimeFormatter": {
+                          "hour": "HH:mm"
+                        }
+                      }
+                    },
+                    "yaxis": [
+                      {
+                        "title": {
+                          "text": "W"
+                        },
+                        "min": 0,
+                        "labels": {
+                          "formatter": "EVAL:function(val) { return Math.round(val) + ' W'; }\n"
+                        }
+                      }
+                    ],
+                    "annotations": {
+                      "xaxis": [
+                        {
+                          "x": "new Date(new Date().setHours(24,0,0,0)).getTime()",
+                          "borderColor": "#999",
+                          "strokeDashArray": 4,
+                          "label": {
+                            "text": "Zajtra",
+                            "orientation": "vertical",
+                            "style": {
+                              "color": "#fff",
+                              "background": "#666",
+                              "fontSize": "12px"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "series": [
+                    {
+                      "entity": "sensor.solcast_forecast_today",
+                      "name": "Dnes (odhad)",
+                      "type": "area",
+                      "color": "#FF9800",
+                      "opacity": 0.3,
+                      "stroke_width": 2,
+                      "data_generator": "return entity.attributes.detailedForecast.map((entry) => {\n  return [new Date(entry.period_start).getTime(), entry.pv_estimate * 1000];\n});\n"
+                    },
+                    {
+                      "entity": "sensor.solcast_forecast_tomorrow",
+                      "name": "Zajtra (odhad)",
+                      "type": "area",
+                      "color": "#2196F3",
+                      "opacity": 0.3,
+                      "stroke_width": 2,
+                      "data_generator": "return entity.attributes.detailedForecast.map((entry) => {\n  return [new Date(entry.period_start).getTime(), entry.pv_estimate * 1000];\n});\n"
+                    },
+                    {
+                      "entity": "sensor.solcast_forecast_tomorrow",
+                      "name": "Zajtra (optimist.)",
+                      "type": "line",
+                      "color": "#4CAF50",
+                      "stroke_width": 1,
+                      "opacity": 0.5,
+                      "float_precision": 0,
+                      "stroke_dash": 4,
+                      "data_generator": "return entity.attributes.detailedForecast.map((entry) => {\n  return [new Date(entry.period_start).getTime(), entry.pv_estimate90 * 1000];\n});\n"
+                    },
+                    {
+                      "entity": "sensor.solcast_forecast_tomorrow",
+                      "name": "Zajtra (pesimist.)",
+                      "type": "line",
+                      "color": "#F44336",
+                      "stroke_width": 1,
+                      "opacity": 0.5,
+                      "float_precision": 0,
+                      "stroke_dash": 4,
+                      "data_generator": "return entity.attributes.detailedForecast.map((entry) => {\n  return [new Date(entry.period_start).getTime(), entry.pv_estimate10 * 1000];\n});\n"
+                    },
+                    {
+                      "entity": "sensor.pv_power",
+                      "name": "Reálna výroba",
+                      "type": "line",
+                      "color": "#4CAF50",
+                      "stroke_width": 3
+                    }
+                  ],
+                  "grid_options": {
+                    "columns": "full",
+                    "rows": 5
+                  }
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "column_span": 2,
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "🧠 Smart rozhodnutia",
+                  "heading_style": "title",
+                  "icon": "mdi:brain"
+                },
+                {
+                  "type": "tile",
+                  "entity": "binary_sensor.solar_ev_nabijat_v_noci",
+                  "name": "EV nabíjať v noci?",
+                  "grid_options": {
+                    "columns": 6,
+                    "rows": 2
+                  }
+                },
+                {
+                  "type": "tile",
+                  "entity": "binary_sensor.solar_bojler_ohriat_v_noci",
+                  "name": "Bojler ohriať v noci?",
+                  "grid_options": {
+                    "columns": 6,
+                    "rows": 2
+                  }
+                },
+                {
+                  "type": "markdown",
+                  "content": "{% set ev = is_state('binary_sensor.solar_ev_nabijat_v_noci', 'on') %} {% set bojler = is_state('binary_sensor.solar_bojler_ohriat_v_noci', 'on') %} {% set forecast = states('sensor.solar_forecast_tomorrow') | float(0) %} {% set rating = states('sensor.solar_forecast_tomorrow_rating') %} {% set soc = states('sensor.mysan_battery_level') | float(0) %}\n**Predpoveď zajtra:** {{ forecast }} kWh ({{ rating }}) **EV SOC:** {{ soc }}%\n{% if ev %} 🔌 **EV:** Nabíjaj cez noc pri T1 — málo slnka zajtra {% else %} ☀️ **EV:** Počkaj na prebytky — dosť energie zajtra {% endif %}\n{% if bojler %} 🔥 **Bojler:** Ohrej v noci pri T1 {% else %} ☀️ **Bojler:** Prebytky zajtra postačia {% endif %}\n",
+                  "grid_options": {
+                    "columns": "full"
+                  }
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.mysan_nominal_soc_nissan_leaf",
+                  "name": "EV SOC",
+                  "icon": "mdi:car-battery",
+                  "color": "green",
+                  "vertical": false,
+                  "features_position": "bottom"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.hacharger_status_connector",
+                  "name": "Nabíjačka",
+                  "icon": "mdi:ev-station"
+                },
+                {
+                  "type": "tile",
+                  "entity": "climate.drazitherm",
+                  "name": "Bojler Dražice",
+                  "icon": "mdi:water-boiler"
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "column_span": 2,
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "⚙️ Nastavenia predpovede",
+                  "heading_style": "title",
+                  "icon": "mdi:cog"
+                },
+                {
+                  "type": "tile",
+                  "entity": "input_select.solar_forecast_source",
+                  "name": "Zdroj predpovede",
+                  "icon": "mdi:swap-horizontal",
+                  "grid_options": {
+                    "columns": "full"
+                  }
+                },
+                {
+                  "type": "tile",
+                  "entity": "input_boolean.solar_forecast_ev_enabled",
+                  "name": "Smart EV nabíjanie",
+                  "icon": "mdi:car-electric-outline",
+                  "grid_options": {
+                    "columns": 6
+                  }
+                },
+                {
+                  "type": "tile",
+                  "entity": "input_boolean.solar_forecast_bojler_enabled",
+                  "name": "Smart bojler",
+                  "icon": "mdi:water-boiler",
+                  "grid_options": {
+                    "columns": 6
+                  }
                 },
                 {
                   "type": "entities",
+                  "title": "🔌 EV prah",
                   "entities": [
                     {
-                      "entity": "switch.klima_cojirbfaaai_power_switch",
-                      "name": "Klimatizácia",
-                      "icon": "mdi:air-conditioner"
+                      "entity": "input_number.solar_forecast_ev_threshold",
+                      "name": "Min. kWh zajtra pre skip nočného nabíjania"
+                    }
+                  ],
+                  "show_header_toggle": false
+                },
+                {
+                  "type": "entities",
+                  "title": "🔥 Bojler prah",
+                  "entities": [
+                    {
+                      "entity": "input_number.solar_forecast_bojler_threshold",
+                      "name": "Min. kWh zajtra pre skip nočného ohrevu"
+                    }
+                  ],
+                  "show_header_toggle": false
+                },
+                {
+                  "type": "markdown",
+                  "content": "### 📡 Solcast API\nPosledný update: {{ states('sensor.solcast_api_last_polled') | as_timestamp | timestamp_custom('%d.%m. %H:%M', true) | default('N/A') }}\nAPI volania: {{ states('sensor.solcast_api_used') | default('?') }} / {{ states('sensor.solcast_api_limit') | default('10') }}\nĎalší auto-update: {{ state_attr('sensor.solcast_api_last_polled', 'next_auto_update') | as_timestamp | timestamp_custom('%d.%m. %H:%M', true) | default('N/A') }}\n",
+                  "grid_options": {
+                    "columns": "full"
+                  }
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "column_span": 2,
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "🌤️ Počasie",
+                  "heading_style": "title",
+                  "icon": "mdi:weather-partly-cloudy"
+                },
+                {
+                  "type": "weather-forecast",
+                  "entity": "weather.forecast_home",
+                  "show_forecast": true,
+                  "forecast_type": "daily",
+                  "grid_options": {
+                    "columns": "full",
+                    "rows": 4
+                  }
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.electricity_maps_grid_fossil_fuel_percentage",
+                  "name": "Fosílne palivá v sieti",
+                  "icon": "mdi:factory"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "masonry",
+          "path": "technical",
+          "title": "Technical",
+          "subview": false,
+          "cards": [
+            {
+              "type": "vertical-stack",
+              "cards": [
+                {
+                  "type": "entities",
+                  "title": "💰 Nastavenie taríf (EUR/kWh s distribúciou a DPH)",
+                  "entities": [
+                    {
+                      "type": "section",
+                      "label": "Aktuálny stav"
                     },
                     {
-                      "type": "divider"
+                      "entity": "sensor.aktualna_tarifa",
+                      "name": "Aktuálna tarifa"
                     },
                     {
-                      "entity": "input_boolean.klima_automation_enabled",
-                      "name": "Automatizácia aktívna"
+                      "entity": "sensor.aktualna_cena_kwh",
+                      "name": "Aktuálna cena"
                     },
                     {
-                      "entity": "input_boolean.klima_manual_override",
-                      "name": "Manuálny režim"
+                      "entity": "binary_sensor.je_vikend",
+                      "name": "Je víkend"
                     },
                     {
                       "type": "divider"
                     },
                     {
                       "type": "section",
-                      "label": "Povoliť v tarifách"
+                      "label": "Ceny TÝŽDEŇ (Po-Pi)"
                     },
                     {
-                      "entity": "input_boolean.klima_enable_t1",
-                      "name": "T1 - Noc",
-                      "secondary_info": "22:00 - 06:00"
+                      "entity": "input_number.tariff_t1_price",
+                      "name": "T1 Noc (22:00-06:00)"
                     },
                     {
-                      "entity": "input_boolean.klima_enable_t2",
-                      "name": "T2 - Popoludnie",
-                      "secondary_info": "13:00 - 19:00"
+                      "entity": "input_number.tariff_t3_price",
+                      "name": "T3 Predpoludnie (09:00-13:00)"
                     },
                     {
-                      "entity": "input_boolean.klima_enable_t3",
-                      "name": "T3 - Predpoludnie",
-                      "secondary_info": "09:00 - 13:00"
+                      "entity": "input_number.tariff_t2_price",
+                      "name": "T2 Popoludnie (13:00-19:00)"
                     },
                     {
-                      "entity": "input_boolean.klima_enable_t4",
-                      "name": "T4 - Ráno/Večer",
-                      "secondary_info": "06:00-09:00 + 19:00-22:00"
+                      "entity": "input_number.tariff_t4_price",
+                      "name": "T4 Ráno/Večer (06-09, 19-22)"
+                    },
+                    {
+                      "type": "divider"
+                    },
+                    {
+                      "type": "section",
+                      "label": "Ceny VÍKEND (So-Ne) - zľava 12%"
+                    },
+                    {
+                      "entity": "input_number.tariff_t1_price_weekend",
+                      "name": "T1 Noc víkend"
+                    },
+                    {
+                      "entity": "input_number.tariff_t3_price_weekend",
+                      "name": "T3 Predpoludnie víkend"
+                    },
+                    {
+                      "entity": "input_number.tariff_t2_price_weekend",
+                      "name": "T2 Popoludnie víkend"
+                    },
+                    {
+                      "entity": "input_number.tariff_t4_price_weekend",
+                      "name": "T4 Ráno/Večer víkend"
                     }
                   ],
-                  "title": "Nastavenia"
+                  "show_header_toggle": false
                 },
                 {
-                  "type": "conditional",
-                  "conditions": [
+                  "type": "entities",
+                  "title": "⏰ Časové pásma",
+                  "entities": [
                     {
-                      "condition": "state",
-                      "entity": "input_boolean.klima_automation_enabled",
-                      "state": "on"
+                      "entity": "input_datetime.tariff_t1_start",
+                      "name": "T1 Noc - začiatok",
+                      "format": "time"
+                    },
+                    {
+                      "entity": "input_datetime.tariff_t1_end",
+                      "name": "T1 Noc - koniec",
+                      "format": "time"
+                    },
+                    {
+                      "type": "divider"
+                    },
+                    {
+                      "entity": "input_datetime.tariff_t3_start",
+                      "name": "T3 Predpoludnie - začiatok",
+                      "format": "time"
+                    },
+                    {
+                      "entity": "input_datetime.tariff_t3_end",
+                      "name": "T3 Predpoludnie - koniec",
+                      "format": "time"
+                    },
+                    {
+                      "type": "divider"
+                    },
+                    {
+                      "entity": "input_datetime.tariff_t2_start",
+                      "name": "T2 Popoludnie - začiatok",
+                      "format": "time"
+                    },
+                    {
+                      "entity": "input_datetime.tariff_t2_end",
+                      "name": "T2 Popoludnie - koniec",
+                      "format": "time"
+                    },
+                    {
+                      "type": "divider"
+                    },
+                    {
+                      "entity": "input_datetime.tariff_t4_morning_start",
+                      "name": "T4 ráno začiatok",
+                      "format": "time"
+                    },
+                    {
+                      "entity": "input_datetime.tariff_t4_morning_end",
+                      "name": "T4 ráno koniec",
+                      "format": "time"
+                    },
+                    {
+                      "entity": "input_datetime.tariff_t4_evening_start",
+                      "name": "T4 večer začiatok",
+                      "format": "time"
+                    },
+                    {
+                      "entity": "input_datetime.tariff_t4_evening_end",
+                      "name": "T4 večer koniec",
+                      "format": "time"
                     }
                   ],
-                  "card": {
-                    "type": "glance",
-                    "entities": [
-                      {
-                        "entity": "sensor.aktualna_tarifa",
-                        "name": "Aktuálna"
-                      },
-                      {
-                        "entity": "binary_sensor.t4_aktivna",
-                        "name": "T4 (drahá)"
-                      },
-                      {
-                        "entity": "input_boolean.klima_was_on_before_shutoff",
-                        "name": "Čaká"
-                      }
-                    ],
-                    "show_state": true,
-                    "title": "Stav systému"
-                  }
+                  "show_header_toggle": false
+                },
+                {
+                  "type": "markdown",
+                  "content": "## 📋 Cenník\n| Tarifa | Čas | Týždeň | Víkend | |--------|-----|--------|--------| | T1 Noc | 22:00-06:00 | {{ states('input_number.tariff_t1_price') }} €/kWh | {{ states('input_number.tariff_t1_price_weekend') }} €/kWh | | T3 Predpol. | 09:00-13:00 | {{ states('input_number.tariff_t3_price') }} €/kWh | {{ states('input_number.tariff_t3_price_weekend') }} €/kWh | | T2 Popol. | 13:00-19:00 | {{ states('input_number.tariff_t2_price') }} €/kWh | {{ states('input_number.tariff_t2_price_weekend') }} €/kWh | | T4 Ráno/Več. | 06-09+19-22 | {{ states('input_number.tariff_t4_price') }} €/kWh | {{ states('input_number.tariff_t4_price_weekend') }} €/kWh |\n**Aktuálne:** {{ states('sensor.aktualna_tarifa') }} = **{{ states('sensor.aktualna_cena_kwh') }} EUR/kWh** {% if is_state('binary_sensor.je_vikend', 'on') %}🟢 Víkendová cena{% else %}📅 Pracovný deň{% endif %}\n"
                 }
               ]
-            },
-            {
-              "type": "light",
-              "entity": "light.dimdc_vetranie1",
-              "icon": "mdi:fan"
             },
             {
               "type": "vertical-stack",
               "cards": [
                 {
-                  "type": "markdown",
-                  "content": "## 💨 Vetranie\n{% set s = states('input_number.vetranie_stupen') | int %} **Stupeň: {{ s }}**  &nbsp;|&nbsp;  Napätie: **{{ s + 1 }} V**\n"
-                },
-                {
-                  "type": "custom:button-card",
-                  "entity": "input_number.vetranie_stupen",
-                  "show_name": false,
-                  "show_icon": false,
-                  "show_state": false,
-                  "styles": {
-                    "card": [
-                      {
-                        "padding": "8px"
-                      }
-                    ]
-                  },
-                  "custom_fields": {
-                    "steps": "[[[\n  const stupen = parseInt(entity.state);\n  const boxy = Array.from({length: 9}, (_, i) => {\n    const active = i <= stupen;\n    const color = active ? `hsl(${200 - i*15}, 80%, 45%)` : '#444';\n    return `<div style=\"width:26px;height:26px;border-radius:4px;background:${color};\n              display:flex;align-items:center;justify-content:center;\n              color:white;font-size:11px;font-weight:bold\">${i}</div>`;\n  });\n  return '<div style=\"display:flex;gap:6px;justify-content:center;padding:4px 0\">' + boxy.join('') + '</div>';\n]]]\n"
-                  },
-                  "card_mod": {
-                    "style": ":host { --ha-card-border-radius: 12px; }\n"
-                  }
-                },
-                {
-                  "type": "horizontal-stack",
-                  "cards": [
+                  "type": "entities",
+                  "title": "📊 Denné náklady spotrebičov",
+                  "entities": [
                     {
-                      "type": "button",
-                      "name": "",
-                      "icon": "mdi:minus",
-                      "tap_action": {
-                        "action": "call-service",
-                        "service": "script.vetranie_stupen_dole"
-                      },
-                      "hold_action": {
-                        "action": "call-service",
-                        "service": "script.vetranie_stupen_dole"
-                      },
-                      "styles": {
-                        "card": [
-                          {
-                            "height": "60px"
-                          }
-                        ]
-                      },
-                      "card_mod": {
-                        "style": "ha-card { border-radius: 12px; }\n"
-                      }
+                      "entity": "input_boolean.cost_tracking_enabled",
+                      "name": "Sledovanie aktívne"
                     },
                     {
-                      "type": "entity",
-                      "entity": "input_number.vetranie_stupen",
-                      "name": "Stupeň",
-                      "icon": "none"
+                      "type": "divider"
                     },
                     {
-                      "type": "button",
-                      "name": "",
-                      "icon": "mdi:plus",
-                      "tap_action": {
-                        "action": "call-service",
-                        "service": "script.vetranie_stupen_hore"
-                      },
-                      "hold_action": {
-                        "action": "call-service",
-                        "service": "script.vetranie_stupen_hore"
-                      },
-                      "styles": {
-                        "card": [
-                          {
-                            "height": "60px"
-                          }
-                        ]
-                      },
-                      "card_mod": {
-                        "style": "ha-card { border-radius: 12px; }\n"
-                      }
+                      "type": "section",
+                      "label": "Dnes - náklady (EUR)"
+                    },
+                    {
+                      "entity": "sensor.klima_denne_naklady",
+                      "name": "🌬️ Klíma",
+                      "icon": "mdi:air-conditioner"
+                    },
+                    {
+                      "entity": "sensor.drazice_denne_naklady",
+                      "name": "🔥 Bojler Dražice",
+                      "icon": "mdi:water-boiler"
+                    },
+                    {
+                      "entity": "sensor.ariston_denne_naklady",
+                      "name": "💧 Bojler Ariston",
+                      "icon": "mdi:water-boiler-alert"
+                    },
+                    {
+                      "entity": "sensor.celkove_denne_naklady_spotrebicov",
+                      "name": "📊 Celkom dnes",
+                      "icon": "mdi:sigma"
+                    },
+                    {
+                      "type": "divider"
+                    },
+                    {
+                      "type": "section",
+                      "label": "Dnes - energia (kWh)"
+                    },
+                    {
+                      "entity": "input_number.energy_daily_klima",
+                      "name": "🌬️ Klíma"
+                    },
+                    {
+                      "entity": "input_number.energy_daily_bojler_drazice",
+                      "name": "🔥 Dražice"
+                    },
+                    {
+                      "entity": "input_number.energy_daily_bojler_ariston",
+                      "name": "💧 Ariston"
                     }
-                  ]
+                  ],
+                  "show_header_toggle": false,
+                  "state_color": true
+                },
+                {
+                  "type": "entities",
+                  "title": "📅 Mesačné náklady spotrebičov",
+                  "entities": [
+                    {
+                      "entity": "sensor.klima_mesacne_naklady",
+                      "name": "🌬️ Klíma"
+                    },
+                    {
+                      "entity": "sensor.drazice_mesacne_naklady",
+                      "name": "🔥 Bojler Dražice"
+                    },
+                    {
+                      "entity": "sensor.ariston_mesacne_naklady",
+                      "name": "💧 Bojler Ariston"
+                    }
+                  ],
+                  "show_header_toggle": false,
+                  "state_color": true
                 }
               ]
             },
             {
               "type": "entities",
+              "title": "🔄 Git Push",
               "entities": [
                 {
-                  "entity": "sensor.wifi_smart_switch_air_quality",
-                  "name": "Air quality"
+                  "entity": "input_text.git_commit_message",
+                  "name": "Popis zmeny"
                 },
                 {
-                  "entity": "sensor.wifi_smart_switch_carbon_dioxide",
-                  "name": "Carbon dioxide"
+                  "type": "button",
+                  "name": "Push to GitHub",
+                  "icon": "mdi:github",
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "script.git_push"
+                  },
+                  "action_name": "PUSH"
                 },
                 {
-                  "entity": "sensor.wifi_smart_switch_humidity",
-                  "name": "Humidity"
-                },
-                {
-                  "entity": "sensor.wifi_smart_switch_temperature",
-                  "name": "Temperature"
-                }
-              ],
-              "title": "WiFi Smart Switch"
-            }
-          ]
-        },
-        {
-          "type": "sections",
-          "max_columns": 4,
-          "title": "Svetla",
-          "path": "svetla",
-          "icon": "mdi:lightbulb-on",
-          "sections": [
-            {
-              "type": "grid",
-              "cards": [
-                {
-                  "type": "heading",
-                  "icon": "mdi:pine-tree",
-                  "heading_style": "subtitle",
-                  "heading": "Vianončné"
-                },
-                {
-                  "type": "tile",
-                  "entity": "switch.pw_seda",
-                  "name": "Vian. stromček",
-                  "icon": "mdi:pine-tree-variant-outline",
-                  "vertical": false,
-                  "features_position": "bottom"
-                },
-                {
-                  "type": "tile",
-                  "entity": "switch.pw_outdor_ldl",
-                  "name": "Pred domom",
-                  "icon": "mdi:tree",
-                  "vertical": false,
-                  "features_position": "bottom"
-                }
-              ],
-              "column_span": 1
-            },
-            {
-              "type": "grid",
-              "cards": [
-                {
-                  "type": "tile",
-                  "entity": "light.led_ccww_controller",
-                  "name": "LED akvárium",
-                  "show_entity_picture": false,
-                  "hide_state": false,
-                  "vertical": false,
-                  "features": [
-                    {
-                      "type": "toggle"
-                    },
-                    {
-                      "type": "light-brightness"
-                    },
-                    {
-                      "type": "light-color-temp"
-                    }
-                  ],
-                  "features_position": "bottom",
-                  "grid_options": {
-                    "columns": "full"
-                  }
-                },
-                {
-                  "type": "heading",
-                  "icon": "",
-                  "heading_style": "subtitle"
-                },
-                {
-                  "type": "tile",
-                  "entity": "light.led_kuchyna_all",
-                  "state_content": [
-                    "brightness",
-                    "color_temp_kelvin",
-                    "color_temp"
-                  ],
-                  "vertical": false,
-                  "features": [
-                    {
-                      "type": "toggle"
-                    },
-                    {
-                      "type": "light-brightness"
-                    },
-                    {
-                      "type": "light-color-temp"
-                    }
-                  ],
-                  "features_position": "bottom"
-                },
-                {
-                  "type": "tile",
-                  "entity": "light.bulb_e27_stolna",
-                  "name": "LED hosťovská",
-                  "vertical": false,
-                  "features": [
-                    {
-                      "type": "toggle"
-                    },
-                    {
-                      "type": "light-brightness"
-                    },
-                    {
-                      "type": "light-color-temp"
-                    }
-                  ],
-                  "features_position": "bottom"
-                },
-                {
-                  "type": "heading",
-                  "icon": "mdi:desk",
-                  "heading_style": "subtitle"
-                },
-                {
-                  "type": "tile",
-                  "entity": "light.led_pracovna_all",
-                  "show_entity_picture": false,
-                  "hide_state": false,
-                  "state_content": [
-                    "state",
-                    "brightness"
-                  ],
-                  "vertical": false,
-                  "features": [
-                    {
-                      "type": "toggle"
-                    },
-                    {
-                      "type": "light-brightness"
-                    }
-                  ],
-                  "features_position": "bottom",
-                  "grid_options": {
-                    "columns": "full",
-                    "rows": 3
-                  }
+                  "entity": "sensor.git_push_status",
+                  "name": "Posledný výsledok"
                 }
               ]
             },
             {
-              "type": "grid",
+              "type": "vertical-stack",
               "cards": [
                 {
                   "type": "entities",
+                  "title": "💨 Vetranie - CO2 automatizácia",
+                  "show_header_toggle": false,
                   "entities": [
                     {
-                      "entity": "light.detska_pri_dverach"
+                      "entity": "input_boolean.vetranie_co2_auto_enabled",
+                      "name": "CO2 automatizácia"
                     },
                     {
-                      "entity": "light.detska_pri_okne"
+                      "entity": "input_boolean.vetranie_forced_off",
+                      "name": "Vynútené vypnutie"
                     },
                     {
-                      "entity": "light.kuchyna_1"
+                      "entity": "sensor.wifi_smart_switch_carbon_dioxide",
+                      "name": "Aktuálny CO2",
+                      "icon": "mdi:molecule-co2"
                     },
                     {
-                      "entity": "light.kuchyna_2"
+                      "entity": "input_number.vetranie_stupen",
+                      "name": "Aktuálny stupeň"
                     },
                     {
-                      "entity": "light.kuchyna_3"
+                      "type": "divider"
                     },
                     {
-                      "entity": "light.lampicka"
+                      "type": "section",
+                      "label": "CO2 prahy"
                     },
                     {
-                      "entity": "light.spalna"
+                      "entity": "input_number.vetranie_co2_threshold_high",
+                      "name": "Prah vysoký (ppm)"
                     },
                     {
-                      "entity": "light.bulb_e27_stolna"
+                      "entity": "input_number.vetranie_co2_threshold_low",
+                      "name": "Prah nízky (ppm)"
                     },
                     {
-                      "entity": "light.led_office_1"
+                      "entity": "input_number.vetranie_co2_stupen",
+                      "name": "Stupeň pri vysokom CO2"
                     },
                     {
-                      "entity": "light.led_office_2"
+                      "type": "divider"
                     },
                     {
-                      "entity": "light.led_office_3"
+                      "type": "section",
+                      "label": "Auto-reštart po forced off"
                     },
                     {
-                      "entity": "light.led_ccww_controller",
-                      "name": "Akvarium LED",
-                      "icon": "mdi:fishbowl-outline"
-                    }
-                  ],
-                  "title": "Light"
-                }
-              ]
-            }
-          ],
-          "cards": [],
-          "header": {}
-        },
-        {
-          "type": "sections",
-          "max_columns": 4,
-          "title": "Zaluzie",
-          "path": "zaluzie",
-          "icon": "mdi:blinds-horizontal",
-          "sections": [
-            {
-              "type": "grid",
-              "cards": [
-                {
-                  "type": "heading",
-                  "heading": "New section"
-                },
-                {
-                  "type": "tile",
-                  "entity": "cover.zaluz_rano",
-                  "vertical": false,
-                  "features_position": "bottom",
-                  "features": [
-                    {
-                      "type": "cover-open-close"
-                    }
-                  ]
-                },
-                {
-                  "type": "tile",
-                  "entity": "cover.zaluz_vychod",
-                  "vertical": false,
-                  "features_position": "bottom",
-                  "features": [
-                    {
-                      "type": "cover-open-close"
+                      "entity": "input_boolean.vetranie_auto_restart_enabled",
+                      "name": "Auto-reštart aktívny"
                     },
                     {
-                      "type": "cover-tilt-position"
-                    }
-                  ]
-                },
-                {
-                  "type": "tile",
-                  "entity": "cover.zaluz_fajciarska_noc",
-                  "vertical": false,
-                  "features_position": "bottom",
-                  "features": [
-                    {
-                      "type": "cover-open-close"
-                    }
-                  ]
-                }
-              ]
-            },
-            {
-              "type": "grid",
-              "cards": [
-                {
-                  "type": "heading",
-                  "heading": "New section"
-                },
-                {
-                  "type": "entities",
-                  "entities": [
-                    {
-                      "entity": "cover.detska_1l"
+                      "entity": "input_datetime.vetranie_auto_restart_time",
+                      "name": "Čas reštartu",
+                      "format": "time"
                     },
                     {
-                      "entity": "cover.detska_1p"
+                      "entity": "input_number.vetranie_auto_restart_stupen",
+                      "name": "Stupeň po reštarte"
                     },
                     {
-                      "entity": "cover.herna_l"
-                    },
-                    {
-                      "entity": "cover.herna_p"
-                    },
-                    {
-                      "entity": "cover.hostovska_l"
-                    },
-                    {
-                      "entity": "cover.hostovska_p"
-                    },
-                    {
-                      "entity": "cover.obyvacka_1"
-                    },
-                    {
-                      "entity": "cover.obyvacka_2"
-                    },
-                    {
-                      "entity": "cover.obyvacka_3"
-                    },
-                    {
-                      "entity": "cover.obyvacka_4"
-                    },
-                    {
-                      "entity": "cover.obyvacka_5"
-                    },
-                    {
-                      "entity": "cover.obyvacka_6"
-                    },
-                    {
-                      "entity": "cover.pracovna_1"
-                    },
-                    {
-                      "entity": "cover.pracovna_2"
-                    },
-                    {
-                      "entity": "cover.spalna_1"
-                    },
-                    {
-                      "entity": "cover.spalna_2"
-                    },
-                    {
-                      "entity": "cover.spalna_3"
-                    },
-                    {
-                      "entity": "cover.spalna_4"
+                      "entity": "input_number.vetranie_stupen_pred_forced_off",
+                      "name": "Stupeň pred forced off (info)"
                     }
                   ]
                 }

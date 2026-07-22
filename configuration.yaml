@@ -9,10 +9,27 @@ automation: !include automations.yaml
 script: !include scripts.yaml
 scene: !include scenes.yaml
 
+
+# Default dashboard ostáva storage (UI-editovateľný); pridávame YAML dashboard pre EV/energiu
+lovelace:
+  mode: storage
+  dashboards:
+    ev-energia:
+      mode: yaml
+      title: "EV & Energia"
+      icon: mdi:ev-station
+      show_in_sidebar: true
+      filename: dashboards/ev_energy.yaml
+
 homeassistant:
   packages:
-    webasto_next: !include packages/modbus_webasto.yaml
-    ev_charging: !include packages/ev_charging_tracking.yaml
+    energy_core: !include packages/energy_core.yaml
+    ev_session: !include packages/ev_session.yaml
+    ev_control: !include packages/ev_control.yaml
+    ev_stats: !include packages/ev_stats.yaml
+    ev_autorecover: !include packages/ev_autorecover.yaml
+    ev_manual: !include packages/ev_manual.yaml
+    ev_schedule: !include packages/ev_schedule.yaml
     solar_forecast: !include packages/solar_forecast.yaml
     
 #rest:
@@ -183,6 +200,10 @@ input_datetime:
 
 # Prepínače systému
 input_boolean:
+  kvetiny_alarm:
+    name: "Kvety treba zalievať"
+    icon: mdi:water-alert
+
   tariff_system_enabled:
     name: "Tarífny systém aktívny"
     icon: mdi:currency-eur
@@ -833,10 +854,42 @@ command_line:
         {% endif %}
       icon: mdi:github
 
+  # EV session table data (parsed z /config/ev_sessions.csv pre flex-table-card)
+  - sensor:
+      name: "EV Sessions Table"
+      unique_id: ev_sessions_table
+      command: "python3 /config/scripts/ev_sessions_json.py"
+      scan_interval: 300
+      command_timeout: 20
+      value_template: "{{ value_json.count }}"
+      json_attributes:
+        - label
+        - period
+        - offset
+        - head_kwh
+        - head_cost
+        - head_solar_pct
+        - chart_mode
+        - chart
+        - by_vehicle
+        - vehicles
+        - sessions
+        - all_count
+        - all_kwh
+        - all_cost
+
+# Vylúč veľký sessions atribút z recordera (zoznam → DB bloat)
+recorder:
+  exclude:
+    entities:
+      - sensor.ev_sessions_table
+
 shell_command:
   git_push_config: '/config/scripts/git_push.sh "{{ message }}"'
   git_export_dashboard: '/config/scripts/export_dashboard.sh'
   git_pull_config: '/config/scripts/git_pull.sh'
+  ev_write_stats_ctrl: '/config/scripts/ev_write_stats.sh "{{ period }}" "{{ offset }}" "{{ metric | default(''Solar'') }}" "{{ vehicle | default(''Všetky'') }}"'
+  ev_export_xlsx: 'python3 /config/scripts/ev_export_xlsx.py'
   
 
 # ================================
@@ -1194,7 +1247,7 @@ template:
             {% set surplus = states('sensor.active_power') | float(0) %}
             {% set current_temp = state_attr('climate.drazitherm', 'current_temperature') | float(50) %}
             {% set forced_temp = states('input_number.bojler_drazice_temp_forced') | float(38) %}
-            
+
             {% if current_temp < forced_temp %}
               Teplota pod {{ forced_temp }}°C - núdzový ohrev
             {% elif surplus > states('input_number.bojler_drazice_surplus_threshold_boost') | float(2500) %}
@@ -1206,3 +1259,4 @@ template:
             {% else %}
               Udržiavací režim
             {% endif %}
+

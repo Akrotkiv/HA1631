@@ -98,7 +98,7 @@ aquarium_light_control:
             entity_id: light.led_ccww_controller
           data:
             brightness: "{{ brightness | int }}"
-            color_temp: "{{ color_temp | int }}"
+            color_temp_kelvin: "{{ (1000000 / (color_temp | int)) | round | int }}"
             transition: "{{ transition | int }}"
 
 # NOVÝ SCRIPT - Obnova po reštarte
@@ -115,7 +115,7 @@ aquarium_restore_state:
         entity_id: light.led_ccww_controller
       data:
         brightness: "{{ states('input_number.aquarium_last_brightness') | int }}"
-        color_temp: "{{ states('input_number.aquarium_last_color_temp') | int }}"
+        color_temp_kelvin: "{{ (1000000 / (states('input_number.aquarium_last_color_temp') | int)) | round | int }}"
         transition: 5
         
 # VETRANIE - Script pre ovládanie stupňov
@@ -172,3 +172,52 @@ vetranie_stupen_dole:
     - service: script.vetranie_nastav_stupen
       data:
         stupen: "{{ aktualny - 1 }}"
+
+# EV - Plná obnova nabíjania (overené 11.6.: jemný reštart NEpomohol na zaseknutý
+# pilot ~6A; OCPP reset áno -> 5.9 kW). Sekvencia mirroruje ručný postup:
+# OCPP reset -> počkať na reconnect -> odblok -> availability ON -> charge_control ON.
+ev_restart_charging:
+  alias: "EV - Obnova nabíjania (reset + štart)"
+  icon: mdi:restart
+  mode: single
+  sequence:
+    # 1) OCPP reset nabíjačky — lieči zaseknutý pilot signál
+    - service: button.press
+      target: { entity_id: button.hacharger_reset }
+    # 2) počkaj kým charger znova nabehne (nie unavailable), max 75 s
+    - wait_template: >
+        {{ states('sensor.hacharger_status_connector') not in
+           ['unavailable', 'unknown', 'Unavailable'] }}
+      timeout: "00:01:15"
+      continue_on_timeout: true
+    # nech charger PLNE nabehne — inak je RemoteStart "Rejected" (overené 11.6.)
+    - delay: { seconds: 15 }
+    # 3) zruš blok/pauzu
+    - service: input_boolean.turn_off
+      target: { entity_id: input_boolean.ev_charging_blocked }
+    - service: input_select.select_option
+      target: { entity_id: input_select.ev_block_reason }
+      data: { option: "none" }
+    # 4) povoľ (Operative) a spusti transakciu
+    - service: switch.turn_on
+      target: { entity_id: switch.hacharger_availability }
+    - delay: { seconds: 6 }
+    - service: switch.turn_on
+      target: { entity_id: switch.hacharger_charge_control }
+      continue_on_error: true
+    # 5) retry — ak ešte nenabíja, skús RemoteStart znova (prvý býva odmietnutý)
+    - delay: { seconds: 12 }
+    - if:
+        - condition: not
+          conditions:
+            - condition: state
+              entity_id: sensor.hacharger_status_connector
+              state: "Charging"
+      then:
+        - service: switch.turn_on
+          target: { entity_id: switch.hacharger_charge_control }
+          continue_on_error: true
+    - service: logbook.log
+      data:
+        name: "EV Control"
+        message: "🔄 Obnova nabíjania: OCPP reset + štart"

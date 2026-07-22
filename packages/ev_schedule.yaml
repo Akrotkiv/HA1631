@@ -1,0 +1,256 @@
+# ============================================
+# EV PLÁN NABÍJANIA  (parametrický plán)
+# packages/ev_schedule.yaml
+#
+# Jeden plán: [zapnuté] [režim] [časovanie+čas] [cieľ] [opakovať].
+# - Časovanie "Štart o"  : nabíjanie začne o nastavenom čase.
+# - Časovanie "Hotové do": deadline + predpokladaný prúd (A) → systém VYPOČÍTA
+#   a zobrazí čas štartu (sensor.ev_plan_start_time).
+# - O štarte plán APLIKUJE režim + cieľ do hlavného ovládania (ev_charge_mode,
+#   ev_target_type, ev_soc_limit / ev_target_range_km / ev_kwh_limit) a uvoľní blok.
+# - Auto-arm (bez replugu): keď je plán zapnutý a auto pripojené pred štartom,
+#   sám sa podrží ako block_reason = "schedule".
+# - Raz → po štarte sa vypne; Denne → naarmuje sa znova.
+#
+# Reuse: input_boolean.ev_scheduled_enabled (Zapnuté), input_datetime.ev_scheduled_time (čas).
+# Kapacita Leaf 40 kWh: sensor.mysan_energy_capacity_nissan_leaf.
+# ============================================
+
+input_select:
+  ev_plan_mode:
+    name: "Plán - Režim"
+    options: ["Fast", "Min+Solar", "Solar"]
+    initial: "Fast"
+    icon: mdi:ev-station
+  ev_plan_timing:
+    name: "Plán - Časovanie"
+    options: ["Štart o", "Hotové do"]
+    initial: "Štart o"
+    icon: mdi:clock-start
+  ev_plan_target:
+    name: "Plán - Cieľ"
+    options: ["Žiadny", "SOC", "Dojazd", "kWh"]
+    initial: "SOC"
+    icon: mdi:target
+  ev_plan_repeat:
+    name: "Plán - Opakovať"
+    options: ["Raz", "Denne"]
+    initial: "Denne"
+    icon: mdi:repeat
+
+input_number:
+  ev_plan_current:
+    name: "Plán - Nabíjací prúd (A)"
+    min: 6
+    max: 32
+    step: 1
+    initial: 16
+    unit_of_measurement: "A"
+    mode: slider
+    icon: mdi:current-ac
+  # Samostatný cieľ SOC pre plán — do ev_soc_limit sa prepíše až pri štarte plánu
+  ev_plan_soc:
+    name: "Plán - Cieľ SOC (%)"
+    min: 20
+    max: 100
+    step: 5
+    initial: 80
+    unit_of_measurement: "%"
+    mode: slider
+    icon: mdi:battery-charging-80
+  ev_plan_kwh:
+    name: "Plán - Dobiť (kWh)"
+    min: 1
+    max: 40
+    step: 1
+    initial: 10
+    unit_of_measurement: "kWh"
+    mode: slider
+    icon: mdi:lightning-bolt
+
+input_boolean:
+  # "Kábel pripojený" — drží sa cez solar-pauzy (status Unavailable), aby plán
+  # vedel o štarte, či je auto reálne pripojené.
+  ev_cable_connected:
+    name: "EV - Kábel pripojený"
+    icon: mdi:ev-plug-type2
+
+template:
+  - sensor:
+      # Potrebná energia na dosiahnutie cieľa (kWh) — pre departure výpočet
+      - name: "EV Plan Needed kWh"
+        unique_id: ev_plan_needed_kwh
+        unit_of_measurement: "kWh"
+        icon: mdi:battery-charging
+        state: >
+          {% set t = states('input_select.ev_plan_target') %}
+          {% set soc = states('sensor.mysan_battery_level') | float(0) %}
+          {% set cap = states('sensor.mysan_energy_capacity_nissan_leaf') | float(40) %}
+          {% if t == 'SOC' %}
+            {{ [ (states('input_number.ev_plan_soc')|float(80) - soc) / 100 * cap, 0 ] | max | round(1) }}
+          {% elif t == 'kWh' %}
+            {{ states('input_number.ev_plan_kwh') | float(0) | round(1) }}
+          {% elif t == 'Dojazd' %}
+            {% set rng = states('sensor.mysan_estimated_range') | float(0) %}
+            {% set fullkm = states('sensor.mysan_full_charge_range') | float(228) %}
+            {% set kmperkwh = (fullkm / cap) if cap > 0 else 5.7 %}
+            {{ [ (states('input_number.ev_target_range_km')|float(150) - rng) / kmperkwh, 0 ] | max | round(1) }}
+          {% else %}0{% endif %}
+
+      # Efektívny čas štartu (HH:MM) — pevný alebo dopočítaný z deadline
+      - name: "EV Plan Start Time"
+        unique_id: ev_plan_start_time
+        icon: mdi:clock-start
+        state: >
+          {% set t = states('input_datetime.ev_scheduled_time')[0:5] %}
+          {% if states('input_select.ev_plan_timing') == 'Štart o' %}
+            {{ t }}
+          {% else %}
+            {% set needed = states('sensor.ev_plan_needed_kwh') | float(0) %}
+            {% set kw = (states('input_number.ev_plan_current') | float(16)) * 0.23 %}
+            {% set dur_min = (needed / kw * 60) if kw > 0 else 0 %}
+            {% set dep_min = (t[0:2]|int) * 60 + (t[3:5]|int) %}
+            {% set s = (((dep_min - dur_min) | int) % 1440 + 1440) % 1440 %}
+            {{ '%02d:%02d' | format(s // 60, s % 60) }}
+          {% endif %}
+
+      # Súhrn pre dashboard
+      - name: "EV Plan Summary"
+        unique_id: ev_plan_summary
+        icon: mdi:calendar-clock
+        state: >-
+          {%- set en = is_state('input_boolean.ev_scheduled_enabled','on') -%}
+          {%- set tg = states('input_select.ev_plan_target') -%}
+          {%- set st = states('sensor.ev_plan_start_time') -%}
+          {%- set when = ('štart ' ~ st) if states('input_select.ev_plan_timing') == 'Štart o'
+              else ('hotové do ' ~ states('input_datetime.ev_scheduled_time')[0:5] ~ ' (štart ~' ~ st ~ ')') -%}
+          {%- set tgt = (' · do ' ~ (states('input_number.ev_plan_soc')|int)|string ~ '%') if tg == 'SOC'
+              else ((' · do ' ~ (states('input_number.ev_target_range_km')|int)|string ~ ' km') if tg == 'Dojazd'
+              else ((' · +' ~ (states('input_number.ev_plan_kwh')|int)|string ~ ' kWh') if tg == 'kWh' else '')) -%}
+          {{ 'Vypnuté' if not en else (states('input_select.ev_plan_repeat') ~ ' · ' ~ when ~ ' · ' ~ states('input_select.ev_plan_mode') ~ tgt) }}
+
+automation:
+  # ---- Sledovanie "kábel pripojený" (drží sa cez solar-pauzy / Unavailable) ----
+  - id: ev_cable_tracker
+    alias: "EV - Sledovanie kábla"
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: sensor.hacharger_status_connector
+      - platform: homeassistant
+        event: start
+    action:
+      - choose:
+          # HA štart: inicializuj — Available = odpojené, inak (vrátane Unavailable) pripojené
+          - conditions: "{{ trigger.platform == 'homeassistant' }}"
+            sequence:
+              - service: "input_boolean.turn_{{ 'off' if states('sensor.hacharger_status_connector') == 'Available' else 'on' }}"
+                target: { entity_id: input_boolean.ev_cable_connected }
+          # pripojené (plugged stavy)
+          - conditions: "{{ trigger.to_state.state in ['Preparing','Charging','SuspendedEV','SuspendedEVSE','Finishing'] }}"
+            sequence:
+              - service: input_boolean.turn_on
+                target: { entity_id: input_boolean.ev_cable_connected }
+          # odpojené
+          - conditions: "{{ trigger.to_state.state == 'Available' }}"
+            sequence:
+              - service: input_boolean.turn_off
+                target: { entity_id: input_boolean.ev_cable_connected }
+
+  # ---- ŠTART: o vypočítanom čase aplikuj režim + cieľ a spusti ----
+  - id: ev_plan_start
+    alias: "EV Plán - Štart"
+    mode: single
+    trigger:
+      - platform: time_pattern
+        minutes: "/1"
+    condition:
+      - condition: state
+        entity_id: input_boolean.ev_scheduled_enabled
+        state: "on"
+      - condition: template
+        value_template: "{{ now().strftime('%H:%M') == states('sensor.ev_plan_start_time') }}"
+      # auto je pripojené (kábel — drží sa aj cez solar-pauzu)
+      - condition: state
+        entity_id: input_boolean.ev_cable_connected
+        state: "on"
+    action:
+      # 1) aplikuj cieľ
+      - choose:
+          - conditions: "{{ states('input_select.ev_plan_target') == 'SOC' }}"
+            sequence:
+              - service: input_number.set_value
+                target: { entity_id: input_number.ev_soc_limit }
+                data: { value: "{{ states('input_number.ev_plan_soc') | float(80) }}" }
+              - service: input_select.select_option
+                target: { entity_id: input_select.ev_target_type }
+                data: { option: "SOC" }
+          - conditions: "{{ states('input_select.ev_plan_target') == 'Dojazd' }}"
+            sequence:
+              - service: input_select.select_option
+                target: { entity_id: input_select.ev_target_type }
+                data: { option: "Range" }
+          - conditions: "{{ states('input_select.ev_plan_target') == 'kWh' }}"
+            sequence:
+              - service: input_number.set_value
+                target: { entity_id: input_number.ev_kwh_limit }
+                data: { value: "{{ states('input_number.ev_plan_kwh') | float(10) }}" }
+              - service: input_select.select_option
+                target: { entity_id: input_select.ev_target_type }
+                data: { option: "kWh" }
+        default:
+          - service: input_select.select_option
+            target: { entity_id: input_select.ev_target_type }
+            data: { option: "Žiadny" }
+      # 2) aplikuj režim + nabíjací prúd (max, ktorý reguluje aj Fast)
+      - service: input_select.select_option
+        target: { entity_id: input_select.ev_charge_mode }
+        data: { option: "{{ states('input_select.ev_plan_mode') }}" }
+      - service: input_number.set_value
+        target: { entity_id: input_number.ev_solar_max_current }
+        data: { value: "{{ states('input_number.ev_plan_current') | int(16) }}" }
+      # 3) uvoľni blok; ak ešte nenabíja, spusti (bežiace nabíjanie neprerušíme)
+      - variables:
+          was_charging: "{{ is_state('sensor.hacharger_status_connector','Charging') }}"
+      - service: input_boolean.turn_off
+        target: { entity_id: input_boolean.ev_charging_blocked }
+      - service: input_select.select_option
+        target: { entity_id: input_select.ev_block_reason }
+        data: { option: "none" }
+      - service: switch.turn_on
+        target: { entity_id: switch.hacharger_availability }
+      - if: "{{ not was_charging }}"
+        then:
+          - delay: { seconds: 4 }
+          - service: switch.turn_on
+            target: { entity_id: switch.hacharger_charge_control }
+            continue_on_error: true
+      - service: logbook.log
+        data:
+          name: "EV Plán"
+          message: "▶ Plánovaný štart — {{ states('input_select.ev_plan_mode') }}, cieľ {{ states('input_select.ev_plan_target') }}"
+      # 3b) over po 90s — ak charger neposlúchol (OCPP Rejected), spusti plnú obnovu
+      #     (script.ev_restart_charging = OCPP reset + štart)
+      - delay: { seconds: 90 }
+      - if:
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: sensor.hacharger_status_connector
+                state: "Charging"
+          - condition: state
+            entity_id: input_boolean.ev_cable_connected
+            state: "on"
+        then:
+          - service: logbook.log
+            data:
+              name: "EV Plán"
+              message: "⚠️ Štart neprešiel (OCPP) → plná obnova (reset + štart)"
+          - service: script.turn_on
+            target: { entity_id: script.ev_restart_charging }
+      # 4) Raz → vypni plán
+      - condition: state
+        entity_id: input_select.ev_plan_repeat
+        state: "Raz"
+      - service: input_boolean.turn_off
+        target: { entity_id: input_boolean.ev_scheduled_enabled }

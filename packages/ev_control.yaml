@@ -1,0 +1,589 @@
+# ============================================
+# EV CONTROL v2
+# packages/ev_control.yaml
+#
+# Riadi KEDY a KOĽKO nabíjať. Stavový automat s ev_block_reason.
+#
+# REŽIMY (input_select.ev_charge_mode):
+#   Fast       = max prúd (ev_solar_max_current, napr. 32A), ignoruje tarifu/prebytky
+#   Min+Solar  = vždy aspoň min prúd, navyšuje o prebytky (do max)
+#   Solar      = len z prebytkov, pauza pod min
+#   Vyp        = nenabíjať (manuálny blok)
+#
+# CIEĽ (input_select.ev_target_type):
+#   Žiadny | SOC (ev_soc_limit %) | Range (ev_target_range_km, podľa estimated_range)
+#
+# SKIP TARIFY (input_boolean.ev_skip_t1..t4):
+#   pri štarte v zakázanej tarife → blok, obnova keď nastane povolená
+#
+# VOZIDLO (input_select.ev_vehicle): mysan / vojtesla / Petschka / Hosť
+#   detekcia po štarte cez binary_sensor.mysan_charging_status (OVMS AC)
+#   Hosť → automaticky Fast (override možný)
+#
+# BLOK DÔVOD (input_select.ev_block_reason):
+#   none / surplus / tariff / target / schedule / manual
+#
+# STOP = availability OFF → delay → charge_control OFF (spoľahlivé na čistej transakcii)
+# START = availability ON  (auto si vyžiada transakciu)
+# ============================================
+
+# ================================
+# INPUT HELPERS
+# ================================
+input_select:
+  ev_charge_mode:
+    name: "EV - Režim nabíjania"
+    options: ["Fast", "Min+Solar", "Solar", "Vyp"]
+    initial: "Solar"
+    icon: mdi:ev-station
+
+  ev_target_type:
+    name: "EV - Cieľ nabíjania"
+    options: ["Žiadny", "SOC", "Range", "kWh"]
+    initial: "SOC"
+    icon: mdi:target
+
+  ev_vehicle:
+    name: "EV - Vozidlo"
+    options: ["mysan", "vojtesla", "Petschka", "Hosť"]
+    initial: "mysan"
+    icon: mdi:car
+
+  ev_block_reason:
+    name: "EV - Dôvod blokovania"
+    options: ["none", "surplus", "tariff", "target", "schedule", "manual"]
+    initial: "none"
+    icon: mdi:information-outline
+
+input_boolean:
+  ev_charging_blocked:
+    name: "EV - Nabíjanie zablokované"
+    icon: mdi:cancel
+  ev_skip_t1:
+    name: "EV - Vynechať T1"
+    icon: mdi:numeric-1-circle
+  ev_skip_t2:
+    name: "EV - Vynechať T2"
+    icon: mdi:numeric-2-circle
+  ev_skip_t3:
+    name: "EV - Vynechať T3"
+    icon: mdi:numeric-3-circle
+  ev_skip_t4:
+    name: "EV - Vynechať T4"
+    icon: mdi:numeric-4-circle
+    initial: "on"
+  ev_scheduled_enabled:
+    name: "EV - Plánované nabíjanie"
+    icon: mdi:clock-outline
+
+input_number:
+  ev_solar_min_current:
+    name: "EV - Min prúd (A)"
+    min: 6
+    max: 16
+    step: 1
+    initial: 6
+    unit_of_measurement: "A"
+    mode: box
+  ev_solar_max_current:
+    name: "EV - Max prúd (A)"
+    min: 6
+    max: 32
+    step: 1
+    initial: 32
+    unit_of_measurement: "A"
+    mode: slider
+  ev_solar_pause_threshold_w:
+    name: "EV - Prah pauzy (W)"
+    min: 0
+    max: 3000
+    step: 100
+    initial: 1300
+    unit_of_measurement: "W"
+    mode: box
+  ev_solar_resume_threshold_w:
+    name: "EV - Prah obnovenia (W)"
+    min: 500
+    max: 5000
+    step: 100
+    initial: 1400
+    unit_of_measurement: "W"
+    mode: box
+  ev_soc_limit:
+    name: "EV - Cieľ SOC (%)"
+    min: 20
+    max: 100
+    step: 5
+    initial: 80
+    unit_of_measurement: "%"
+    mode: slider
+  ev_target_range_km:
+    name: "EV - Cieľ dojazd (km)"
+    min: 40
+    max: 300
+    step: 10
+    initial: 150
+    unit_of_measurement: "km"
+    mode: slider
+  ev_kwh_limit:
+    name: "EV - Cieľ dobiť (kWh)"
+    min: 1
+    max: 40
+    step: 1
+    initial: 10
+    unit_of_measurement: "kWh"
+    mode: slider
+
+input_datetime:
+  ev_scheduled_time:
+    name: "EV - Čas štartu"
+    has_date: false
+    has_time: true
+
+# ================================
+# TEMPLATE SENSORS
+# ================================
+template:
+  - sensor:
+      # Cieľový prúd podľa režimu
+      - name: "EV Target Current"
+        unique_id: ev_target_current
+        unit_of_measurement: "A"
+        icon: mdi:current-ac
+        state: >
+          {% set mode = states('input_select.ev_charge_mode') %}
+          {% set surplus = states('sensor.gw_surplus') | float(0) %}
+          {% set mn = states('input_number.ev_solar_min_current') | int(6) %}
+          {% set mx = states('input_number.ev_solar_max_current') | int(32) %}
+          {% set sa = (surplus / 230) | int(0) %}
+          {% if mode == 'Fast' %}{{ mx }}
+          {% elif mode == 'Min+Solar' %}{{ [[ [sa, mn] | max, mx] | min, mn] | max }}
+          {% elif mode == 'Solar' %}{% if sa < mn %}0{% else %}{{ [sa, mx] | min }}{% endif %}
+          {% else %}0{% endif %}
+
+      # Je aktuálna tarifa povolená (nie v skip)?
+      - name: "EV Tariff Allowed"
+        unique_id: ev_tariff_allowed
+        icon: mdi:check-decagram
+        state: >
+          {% set skip = false %}
+          {% if is_state('binary_sensor.t1_aktivna','on') and is_state('input_boolean.ev_skip_t1','on') %}{% set skip = true %}{% endif %}
+          {% if is_state('binary_sensor.t2_aktivna','on') and is_state('input_boolean.ev_skip_t2','on') %}{% set skip = true %}{% endif %}
+          {% if is_state('binary_sensor.t3_aktivna','on') and is_state('input_boolean.ev_skip_t3','on') %}{% set skip = true %}{% endif %}
+          {% if is_state('binary_sensor.t4_aktivna','on') and is_state('input_boolean.ev_skip_t4','on') %}{% set skip = true %}{% endif %}
+          {{ 'false' if skip else 'true' }}
+
+      # Cieľ dosiahnutý?
+      - name: "EV Target Reached"
+        unique_id: ev_target_reached
+        icon: mdi:flag-checkered
+        state: >
+          {% set tt = states('input_select.ev_target_type') %}
+          {% if tt == 'SOC' %}
+            {{ 'true' if states('sensor.mysan_battery_level') | float(0) >= states('input_number.ev_soc_limit') | float(100) else 'false' }}
+          {% elif tt == 'Range' %}
+            {{ 'true' if states('sensor.mysan_estimated_range') | float(0) >= states('input_number.ev_target_range_km') | float(999) else 'false' }}
+          {% elif tt == 'kWh' %}
+            {{ 'true' if states('input_number.ev_session_energy_kwh') | float(0) >= states('input_number.ev_kwh_limit') | float(999) else 'false' }}
+          {% else %}false{% endif %}
+
+# ================================
+# AUTOMÁCIE
+# ================================
+automation:
+  # ------------------------------------------------
+  # REGULÁCIA PRÚDU (30s) — podľa režimu
+  # ------------------------------------------------
+  - id: ev_regulate_current
+    alias: "EV - Regulácia prúdu"
+    mode: single
+    max_exceeded: silent
+    trigger:
+      - platform: time_pattern
+        seconds: "/30"
+      # okamžitá reakcia na manuálnu zmenu limitu prúdu počas nabíjania
+      - platform: state
+        entity_id:
+          - input_number.ev_solar_max_current
+          - input_number.ev_solar_min_current
+    condition:
+      - condition: state
+        entity_id: sensor.hacharger_status_connector
+        state: "Charging"
+      - condition: state
+        entity_id: input_boolean.ev_charging_blocked
+        state: "off"
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: input_select.ev_charge_mode
+            state: "Vyp"
+      - condition: state
+        entity_id: sensor.ev_tariff_allowed
+        state: "true"
+    action:
+      - variables:
+          target_a: "{{ states('sensor.ev_target_current') | int(0) }}"
+          current_a: "{{ states('number.hacharger_maximum_current') | int(0) }}"
+      - condition: template
+        value_template: "{{ target_a >= 6 and target_a != current_a }}"
+      - service: number.set_value
+        target:
+          entity_id: number.hacharger_maximum_current
+        data:
+          value: "{{ target_a }}"
+
+  # ------------------------------------------------
+  # SOLAR PAUZA — len režim Solar, málo prebytkov 5 min
+  # ------------------------------------------------
+  - id: ev_solar_pause
+    alias: "EV - Solar pauza"
+    mode: single
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.gw_surplus
+        below: input_number.ev_solar_pause_threshold_w
+        for:
+          minutes: 5
+    condition:
+      - condition: state
+        entity_id: input_select.ev_charge_mode
+        state: "Solar"
+      - condition: state
+        entity_id: sensor.hacharger_status_connector
+        state: "Charging"
+      - condition: state
+        entity_id: input_boolean.ev_charging_blocked
+        state: "off"
+    action:
+      - service: input_select.select_option
+        target: { entity_id: input_select.ev_block_reason }
+        data: { option: "surplus" }
+      - service: switch.turn_off
+        target: { entity_id: switch.hacharger_availability }
+      - delay: { seconds: 2 }
+      - service: switch.turn_off
+        target: { entity_id: switch.hacharger_charge_control }
+      - service: input_boolean.turn_on
+        target: { entity_id: input_boolean.ev_charging_blocked }
+      - service: logbook.log
+        data:
+          name: "EV Control"
+          message: "⏸ Solar pauza — prebytky {{ states('sensor.gw_surplus') }}W"
+
+  # ------------------------------------------------
+  # SOLAR OBNOVENIE — dosť prebytkov 3 min
+  # ------------------------------------------------
+  - id: ev_solar_resume
+    alias: "EV - Solar obnovenie"
+    mode: single
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.gw_surplus
+        above: input_number.ev_solar_resume_threshold_w
+        for:
+          minutes: 3
+    condition:
+      - condition: state
+        entity_id: input_select.ev_charge_mode
+        state: "Solar"
+      - condition: state
+        entity_id: input_select.ev_block_reason
+        state: "surplus"
+      - condition: state
+        entity_id: sensor.ev_tariff_allowed
+        state: "true"
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: sensor.hacharger_status_connector
+            state: "Available"
+    action:
+      - service: switch.turn_on
+        target: { entity_id: switch.hacharger_availability }
+      - service: input_boolean.turn_off
+        target: { entity_id: input_boolean.ev_charging_blocked }
+      - service: input_select.select_option
+        target: { entity_id: input_select.ev_block_reason }
+        data: { option: "none" }
+      - service: logbook.log
+        data:
+          name: "EV Control"
+          message: "▶ Solar obnovenie — prebytky {{ states('sensor.gw_surplus') }}W"
+
+  # ------------------------------------------------
+  # TARIFA — kontrola pri ZMENE tarify
+  # ------------------------------------------------
+  - id: ev_tariff_changed
+    alias: "EV - Zmena tarify"
+    mode: single
+    # Spúšťame na ustálený sensor.ev_tariff_allowed (nie na surové t1..t4),
+    # inak template senzor zaostáva za binárnym triggerom a blok sa minie.
+    trigger:
+      - platform: state
+        entity_id: sensor.ev_tariff_allowed
+        to: "false"
+      - platform: state
+        entity_id: sensor.ev_tariff_allowed
+        to: "true"
+    action:
+      - choose:
+          # Nastala ZAKÁZANÁ tarifa počas nabíjania → blok
+          - conditions:
+              - condition: state
+                entity_id: sensor.hacharger_status_connector
+                state: "Charging"
+              - condition: state
+                entity_id: sensor.ev_tariff_allowed
+                state: "false"
+              - condition: state
+                entity_id: input_boolean.ev_charging_blocked
+                state: "off"
+            sequence:
+              - service: input_select.select_option
+                target: { entity_id: input_select.ev_block_reason }
+                data: { option: "tariff" }
+              - service: switch.turn_off
+                target: { entity_id: switch.hacharger_availability }
+              - delay: { seconds: 2 }
+              - service: switch.turn_off
+                target: { entity_id: switch.hacharger_charge_control }
+              - service: input_boolean.turn_on
+                target: { entity_id: input_boolean.ev_charging_blocked }
+              - service: logbook.log
+                data:
+                  name: "EV Control"
+                  message: "🚫 Zakázaná tarifa {{ states('sensor.ev_tarifa') }} → stop"
+          # Nastala POVOLENÁ tarifa a bolo blokované kvôli tarife → obnov
+          - conditions:
+              - condition: state
+                entity_id: input_select.ev_block_reason
+                state: "tariff"
+              - condition: state
+                entity_id: sensor.ev_tariff_allowed
+                state: "true"
+              - condition: not
+                conditions:
+                  - condition: state
+                    entity_id: sensor.hacharger_status_connector
+                    state: "Available"
+            sequence:
+              - service: switch.turn_on
+                target: { entity_id: switch.hacharger_availability }
+              - service: input_boolean.turn_off
+                target: { entity_id: input_boolean.ev_charging_blocked }
+              - service: input_select.select_option
+                target: { entity_id: input_select.ev_block_reason }
+                data: { option: "none" }
+              - service: logbook.log
+                data:
+                  name: "EV Control"
+                  message: "▶ Povolená tarifa {{ states('sensor.ev_tarifa') }} → obnova"
+
+  # ------------------------------------------------
+  # CIEĽ DOSIAHNUTÝ (SOC alebo Range) → stop
+  # ------------------------------------------------
+  - id: ev_target_reached_stop
+    alias: "EV - Cieľ dosiahnutý"
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: sensor.ev_target_reached
+        to: "true"
+    condition:
+      - condition: state
+        entity_id: sensor.hacharger_status_connector
+        state: "Charging"
+    action:
+      - service: input_select.select_option
+        target: { entity_id: input_select.ev_block_reason }
+        data: { option: "target" }
+      - service: switch.turn_off
+        target: { entity_id: switch.hacharger_availability }
+      - delay: { seconds: 2 }
+      - service: switch.turn_off
+        target: { entity_id: switch.hacharger_charge_control }
+      - service: input_boolean.turn_on
+        target: { entity_id: input_boolean.ev_charging_blocked }
+      - service: persistent_notification.create
+        data:
+          title: "EV - Cieľ dosiahnutý"
+          message: >
+            {% if is_state('input_select.ev_target_type','SOC') %}
+            SOC {{ states('sensor.mysan_battery_level') }}% (cieľ {{ states('input_number.ev_soc_limit') }}%)
+            {% else %}
+            Dojazd {{ states('sensor.mysan_estimated_range') | round(0) }} km (cieľ {{ states('input_number.ev_target_range_km') }} km)
+            {% endif %}
+          notification_id: ev_target_done
+      - service: logbook.log
+        data:
+          name: "EV Control"
+          message: "🏁 Cieľ dosiahnutý → stop"
+
+  # ------------------------------------------------
+  # ŠTART NABÍJANIA — kontrola tarify / schedule / Vyp
+  # ------------------------------------------------
+  - id: ev_on_charge_start
+    alias: "EV - Kontrola pri štarte"
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: sensor.hacharger_status_connector
+        to: "Charging"
+    action:
+      - choose:
+          # Režim Vyp → hneď stop
+          - conditions:
+              - condition: state
+                entity_id: input_select.ev_charge_mode
+                state: "Vyp"
+            sequence:
+              - service: input_select.select_option
+                target: { entity_id: input_select.ev_block_reason }
+                data: { option: "manual" }
+              - service: switch.turn_off
+                target: { entity_id: switch.hacharger_availability }
+              - delay: { seconds: 2 }
+              - service: switch.turn_off
+                target: { entity_id: switch.hacharger_charge_control }
+              - service: input_boolean.turn_on
+                target: { entity_id: input_boolean.ev_charging_blocked }
+          # Zakázaná tarifa → blok
+          - conditions:
+              - condition: state
+                entity_id: sensor.ev_tariff_allowed
+                state: "false"
+            sequence:
+              - service: input_select.select_option
+                target: { entity_id: input_select.ev_block_reason }
+                data: { option: "tariff" }
+              - service: switch.turn_off
+                target: { entity_id: switch.hacharger_availability }
+              - delay: { seconds: 2 }
+              - service: switch.turn_off
+                target: { entity_id: switch.hacharger_charge_control }
+              - service: input_boolean.turn_on
+                target: { entity_id: input_boolean.ev_charging_blocked }
+              - service: logbook.log
+                data:
+                  name: "EV Control"
+                  message: "🚫 Štart v zakázanej tarife {{ states('sensor.ev_tarifa') }} → čakám na povolenú"
+
+  # ------------------------------------------------
+  # DETEKCIA VOZIDLA — 90s po štarte (OVMS AC)
+  # ------------------------------------------------
+  - id: ev_detect_vehicle
+    alias: "EV - Detekcia vozidla"
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: sensor.hacharger_status_connector
+        to: "Charging"
+    action:
+      # default: predpokladaj mysan
+      - service: input_select.select_option
+        target: { entity_id: input_select.ev_vehicle }
+        data: { option: "mysan" }
+      - delay: { seconds: 90 }
+      # ak OVMS nehlási AC nabíjanie → je to hosť
+      - condition: state
+        entity_id: sensor.hacharger_status_connector
+        state: "Charging"
+      - condition: state
+        entity_id: binary_sensor.mysan_charging_status
+        state: "off"
+      - service: input_select.select_option
+        target: { entity_id: input_select.ev_vehicle }
+        data: { option: "Hosť" }
+      - service: input_select.select_option
+        target: { entity_id: input_select.ev_charge_mode }
+        data: { option: "Fast" }
+      - service: logbook.log
+        data:
+          name: "EV Control"
+          message: "🚗 Hosťovské auto detekované → Fast (32A). Možný manuálny override."
+      - service: persistent_notification.create
+        data:
+          title: "EV - Hosťovské auto"
+          message: "OVMS nehlási nabíjanie → Hosť, Fast 32A. Vyber hosťa v zozname pre evidenciu."
+          notification_id: ev_guest
+
+  # (Plánovaný štart presunutý do packages/ev_schedule.yaml → automation ev_plan_start)
+
+  # ------------------------------------------------
+  # REŽIM VYP / ZMENA REŽIMU
+  # ------------------------------------------------
+  - id: ev_mode_changed
+    alias: "EV - Zmena režimu"
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: input_select.ev_charge_mode
+    action:
+      - choose:
+          # Vyp → stop
+          - conditions:
+              - condition: state
+                entity_id: input_select.ev_charge_mode
+                state: "Vyp"
+              - condition: state
+                entity_id: sensor.hacharger_status_connector
+                state: "Charging"
+            sequence:
+              - service: input_select.select_option
+                target: { entity_id: input_select.ev_block_reason }
+                data: { option: "manual" }
+              - service: switch.turn_off
+                target: { entity_id: switch.hacharger_availability }
+              - delay: { seconds: 2 }
+              - service: switch.turn_off
+                target: { entity_id: switch.hacharger_charge_control }
+              - service: input_boolean.turn_on
+                target: { entity_id: input_boolean.ev_charging_blocked }
+          # Z Vyp na iný režim, ak bolo blokované manuálne → obnov
+          - conditions:
+              - condition: state
+                entity_id: input_select.ev_block_reason
+                state: "manual"
+              - condition: not
+                conditions:
+                  - condition: state
+                    entity_id: input_select.ev_charge_mode
+                    state: "Vyp"
+              - condition: not
+                conditions:
+                  - condition: state
+                    entity_id: sensor.hacharger_status_connector
+                    state: "Available"
+            sequence:
+              - service: switch.turn_on
+                target: { entity_id: switch.hacharger_availability }
+              - service: input_boolean.turn_off
+                target: { entity_id: input_boolean.ev_charging_blocked }
+              - service: input_select.select_option
+                target: { entity_id: input_select.ev_block_reason }
+                data: { option: "none" }
+
+  # ------------------------------------------------
+  # ODPOJENIE — reset celého stavu
+  # ------------------------------------------------
+  - id: ev_reset_on_disconnect
+    alias: "EV - Reset pri odpojení"
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: sensor.hacharger_status_connector
+        to: "Available"
+    action:
+      - service: input_boolean.turn_off
+        target: { entity_id: input_boolean.ev_charging_blocked }
+      - service: input_select.select_option
+        target: { entity_id: input_select.ev_block_reason }
+        data: { option: "none" }
+      - service: switch.turn_on
+        target: { entity_id: switch.hacharger_availability }
+      - service: input_select.select_option
+        target: { entity_id: input_select.ev_vehicle }
+        data: { option: "mysan" }
+      - service: persistent_notification.dismiss
+        data: { notification_id: ev_guest }

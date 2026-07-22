@@ -1,0 +1,363 @@
+# ============================================
+# SOLAR SURPLUS EV CHARGING
+# packages/solar_charging.yaml
+# ============================================
+#
+# Logika:
+#   surplus_w = sensor.grid_power  (GoodWe: >0 export, <0 import)
+#   target_current = surplus_w / 230  (zaokrúhlene nadol)
+#   min 6A, max 32A, pod 6A → pauza
+#
+# Entitiy na ktoré sa spolieha:
+#   sensor.grid_power               — GoodWe grid export/import (W)
+#   sensor.hacharger_status_connector — OCPP stav (Charging / Preparing / Available)
+#   switch.hacharger_charge_control   — OCPP start/stop
+#   number.hacharger_maximum_current  — OCPP regulácia prúdu (A)
+#   binary_sensor.t4_aktivna          — vysoká tarifa (T4)
+#   input_boolean.ev_charging_active  — session tracking (z ev_charging_tracking.yaml)
+#
+# ============================================
+
+# ================================
+# INPUT HELPERS
+# ================================
+
+input_boolean:
+  solar_charging_enabled:
+    name: "Solar - Smart nabíjanie aktívne"
+    icon: mdi:solar-power
+
+  solar_charging_paused_low_surplus:
+    name: "Solar - Pauza (málo prebytkov)"
+    icon: mdi:pause-circle
+
+input_number:
+  solar_charging_min_current:
+    name: "Solar - Minimálny prúd (A)"
+    min: 6
+    max: 10
+    step: 1
+    initial: 6
+    unit_of_measurement: "A"
+    icon: mdi:current-ac
+    mode: box
+
+  solar_charging_max_current:
+    name: "Solar - Maximálny prúd (A)"
+    min: 6
+    max: 32
+    step: 1
+    initial: 32
+    unit_of_measurement: "A"
+    icon: mdi:current-ac
+    mode: box
+
+  solar_charging_resume_threshold_w:
+    name: "Solar - Prah pre obnovenie (W)"
+    min: 500
+    max: 5000
+    step: 100
+    initial: 1400
+    unit_of_measurement: "W"
+    icon: mdi:solar-power-variant
+    mode: box
+
+  solar_charging_pause_threshold_w:
+    name: "Solar - Prah pre pauzu (W)"
+    min: 0
+    max: 2000
+    step: 100
+    initial: 1300
+    unit_of_measurement: "W"
+    icon: mdi:pause
+    mode: box
+
+# ================================
+# TEMPLATE SENSORS
+# ================================
+
+template:
+  - sensor:
+      - name: "Solar Surplus Power"
+        unique_id: solar_surplus_power
+        state: >
+          {{ [states('sensor.grid_power') | float(0), 0] | max | round(0) }}
+        unit_of_measurement: "W"
+        device_class: power
+        icon: mdi:solar-power
+        availability: >
+          {{ states('sensor.grid_power') not in ['unknown', 'unavailable'] }}
+
+      - name: "Solar Charging Target Current"
+        unique_id: solar_charging_target_current
+        state: >
+          {% set surplus = states('sensor.solar_surplus_power') | float(0) %}
+          {% set min_a = states('input_number.solar_charging_min_current') | float(6) %}
+          {% set max_a = states('input_number.solar_charging_max_current') | float(16) %}
+          {% set raw = (surplus / 230) | round(0, 'floor') | int %}
+          {% if raw < min_a %}
+            0
+          {% else %}
+            {{ [raw, max_a | int] | min }}
+          {% endif %}
+        unit_of_measurement: "A"
+        icon: mdi:current-ac
+
+      - name: "Solar Charging Status"
+        unique_id: solar_charging_status
+        state: >
+          {% if not is_state('input_boolean.solar_charging_enabled', 'on') %}
+            disabled
+          {% elif is_state('binary_sensor.t4_aktivna', 'on') %}
+            blocked_t4
+          {% elif states('sensor.hacharger_status_connector') == 'Available' %}
+            no_car
+          {% elif is_state('solar_charging_paused_low_surplus', 'on') %}
+            paused
+          {% elif states('sensor.hacharger_status_connector') == 'Charging' %}
+            charging
+          {% else %}
+            idle
+          {% endif %}
+        icon: >
+          {% set s = states('sensor.solar_charging_status') %}
+          {% if s == 'charging' %}mdi:car-electric
+          {% elif s == 'paused' %}mdi:pause-circle
+          {% elif s == 'blocked_t4' %}mdi:currency-eur-off
+          {% elif s == 'disabled' %}mdi:cancel
+          {% else %}mdi:car-off{% endif %}
+
+# ================================
+# AUTOMATIZÁCIE
+# ================================
+
+automation:
+  # --------------------------------------------------
+  # 1. Hlavná regulácia prúdu (každých 30 sekúnd)
+  # --------------------------------------------------
+  - id: solar_charging_regulate_current
+    alias: "Solar - Regulácia nabíjacieho prúdu"
+    description: >
+      Každých 30s nastavuje prúd podľa GoodWe prebytkov.
+      Prebytok / 230V = Ampéry (min 6A, max 16A).
+    mode: single
+    max_exceeded: silent
+    trigger:
+      - platform: time_pattern
+        seconds: "/30"
+    condition:
+      - condition: state
+        entity_id: input_boolean.solar_charging_enabled
+        state: "on"
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: binary_sensor.t4_aktivna
+            state: "on"
+      - condition: state
+        entity_id: sensor.hacharger_status_connector
+        state: "Charging"
+      - condition: template
+        value_template: >
+          {{ states('sensor.grid_power') not in ['unknown', 'unavailable'] }}
+    action:
+      - variables:
+          target_a: "{{ states('sensor.solar_charging_target_current') | int(0) }}"
+          current_a: "{{ states('number.hacharger_maximum_current') | int(0) }}"
+      - condition: template
+        value_template: "{{ target_a != current_a and target_a >= 6 }}"
+      - service: number.set_value
+        target:
+          entity_id: number.hacharger_maximum_current
+        data:
+          value: "{{ target_a }}"
+      - service: logbook.log
+        data:
+          name: "Solar Charging"
+          message: >
+            ⚡ Prúd {{ current_a }}A → {{ target_a }}A
+            (prebytok {{ states('sensor.solar_surplus_power') }}W)
+
+  # --------------------------------------------------
+  # 2. Pauza pri nízkych prebytkov
+  # --------------------------------------------------
+  - id: solar_charging_pause_low_surplus
+    alias: "Solar - Pauza pri nízkych prebytkov"
+    description: >
+      Keď prebytky klesnú pod prah (default 1300W = ~5.6A) na 5 minút,
+      zastaví nabíjanie a nastaví flag paused.
+    mode: single
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.grid_power
+        below: input_number.solar_charging_pause_threshold_w
+        for:
+          minutes: 5
+    condition:
+      - condition: state
+        entity_id: input_boolean.solar_charging_enabled
+        state: "on"
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: binary_sensor.t4_aktivna
+            state: "on"
+      - condition: state
+        entity_id: sensor.hacharger_status_connector
+        state: "Charging"
+      - condition: state
+        entity_id: input_boolean.solar_charging_paused_low_surplus
+        state: "off"
+    action:
+      - service: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.solar_charging_paused_low_surplus
+      - service: switch.turn_off
+        target:
+          entity_id: switch.hacharger_charge_control
+      - service: switch.turn_off
+        target:
+          entity_id: switch.hacharger_availability
+      - service: logbook.log
+        data:
+          name: "Solar Charging"
+          message: >
+            ⏸ Nabíjanie pozastavené — prebytky
+            {{ states('sensor.grid_power') }}W < prah
+            {{ states('input_number.solar_charging_pause_threshold_w') }}W
+
+  # --------------------------------------------------
+  # 3. Obnovenie po dostatočných prebytkov
+  # --------------------------------------------------
+  - id: solar_charging_resume_after_pause
+    alias: "Solar - Obnovenie po prebytkov"
+    description: >
+      Keď prebytky stúpnu nad resume_threshold (default 1400W) na 3 minúty
+      a nabíjanie bolo pozastavené kvôli nízkym prebytkom → reštart.
+    mode: single
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.grid_power
+        above: input_number.solar_charging_resume_threshold_w
+        for:
+          minutes: 3
+    condition:
+      - condition: state
+        entity_id: input_boolean.solar_charging_enabled
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.solar_charging_paused_low_surplus
+        state: "on"
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: binary_sensor.t4_aktivna
+            state: "on"
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: sensor.hacharger_status_connector
+            state: "Available"
+    action:
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.solar_charging_paused_low_surplus
+      - service: switch.turn_on
+        target:
+          entity_id: switch.hacharger_availability
+      - service: logbook.log
+        data:
+          name: "Solar Charging"
+          message: >
+            ▶ Nabíjanie obnovené — prebytky
+            {{ states('sensor.grid_power') }}W > prah
+            {{ states('input_number.solar_charging_resume_threshold_w') }}W
+
+  # --------------------------------------------------
+  # 4. Blokovanie pri T4 (vysoká tarifa)
+  # --------------------------------------------------
+  - id: solar_charging_block_t4
+    alias: "Solar - Blokovanie T4 tarify"
+    description: >
+      Pri prechode na T4 zastaví nabíjanie (aj ak beží solar charging).
+      ev_charging_tracking.yaml rieši schedule na T1 — tu len stopujeme.
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.t4_aktivna
+        to: "on"
+    condition:
+      - condition: state
+        entity_id: sensor.hacharger_status_connector
+        state: "Charging"
+    action:
+      - service: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.solar_charging_paused_low_surplus
+      - service: switch.turn_off
+        target:
+          entity_id: switch.hacharger_charge_control
+      - service: switch.turn_off
+        target:
+          entity_id: switch.hacharger_availability
+      - service: logbook.log
+        data:
+          name: "Solar Charging"
+          message: "🚫 Nabíjanie zastavené — T4 tarifa aktívna"
+
+  # --------------------------------------------------
+  # 5. Obnovenie po konci T4 (pri štarte T1 alebo T3)
+  # --------------------------------------------------
+  - id: solar_charging_resume_after_t4
+    alias: "Solar - Obnovenie po T4 (štart T1/T3)"
+    description: >
+      Keď skončí T4 a začne T1 alebo T3, obnoví nabíjanie
+      ak je auto stále pripojené a solar charging je zapnutý.
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.t1_aktivna
+        to: "on"
+      - platform: state
+        entity_id: binary_sensor.t3_aktivna
+        to: "on"
+    condition:
+      - condition: state
+        entity_id: input_boolean.solar_charging_enabled
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.solar_charging_paused_low_surplus
+        state: "on"
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: sensor.hacharger_status_connector
+            state: "Available"
+    action:
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.solar_charging_paused_low_surplus
+      - service: switch.turn_on
+        target:
+          entity_id: switch.hacharger_availability
+      - service: logbook.log
+        data:
+          name: "Solar Charging"
+          message: >
+            ▶ Nabíjanie obnovené po T4 — aktívna tarifa
+            {{ states('sensor.ev_aktualna_tarifa') }}
+
+  # --------------------------------------------------
+  # 6. Reset pauzy pri odpojení auta
+  # --------------------------------------------------
+  - id: solar_charging_reset_on_disconnect
+    alias: "Solar - Reset pauzy pri odpojení auta"
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: sensor.hacharger_status_connector
+        to: "Available"
+    action:
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.solar_charging_paused_low_surplus
