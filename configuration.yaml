@@ -29,6 +29,7 @@ homeassistant:
     ev_stats: !include packages/ev_stats.yaml
     ev_autorecover: !include packages/ev_autorecover.yaml
     ev_manual: !include packages/ev_manual.yaml
+    ev_manual_entry: !include packages/ev_manual_entry.yaml
     ev_schedule: !include packages/ev_schedule.yaml
     solar_forecast: !include packages/solar_forecast.yaml
     
@@ -39,66 +40,10 @@ homeassistant:
 #      - name: "OVMS Battery SOC"
 #        value_template: "{{ value_json['soc'] }}"
     
-# ================================
-# OVMS - REST API (dexters-web.de)
-# ================================
-
-rest:
-  # OVMS Status - hlavné údaje
-  - resource: !secret ovms_status_url
-    scan_interval: 120
-    sensor:
-      - name: "OVMS SOC"
-        value_template: "{{ value_json.soc | default(0) }}"
-        unit_of_measurement: "%"
-        device_class: battery
-        
-      - name: "OVMS Range"
-        value_template: "{{ value_json.estimatedrange | default(0) }}"
-        unit_of_measurement: "km"
-        icon: mdi:map-marker-distance
-        
-      - name: "OVMS Ideal Range"
-        value_template: "{{ value_json.idealrange | default(0) }}"
-        unit_of_measurement: "km"
-        icon: mdi:map-marker-distance
-        
-      - name: "OVMS Charging"
-        value_template: "{{ value_json.charging | default(false) }}"
-        icon: mdi:ev-station
-        
-      - name: "OVMS Charge State"
-        value_template: "{{ value_json.chargestate | default('unknown') }}"
-        icon: mdi:battery-charging
-        
-      - name: "OVMS SOH"
-        value_template: "{{ value_json.soh | default(0) }}"
-        unit_of_measurement: "%"
-        icon: mdi:battery-heart-variant
-        
-      - name: "OVMS Odometer"
-        value_template: "{{ value_json.odometer | default(0) | round(1) }}"
-        unit_of_measurement: "km"
-        icon: mdi:counter
-
-  # OVMS Charge - nabíjanie detaily
-  - resource: !secret ovms_charge_url
-    scan_interval: 60
-    sensor:
-      - name: "OVMS Charge Power"
-        value_template: "{{ value_json.chargepower | default(0) }}"
-        unit_of_measurement: "kW"
-        device_class: power
-        
-      - name: "OVMS Charge Current"
-        value_template: "{{ value_json.chargecurrent | default(0) }}"
-        unit_of_measurement: "A"
-        device_class: current
-        
-      - name: "OVMS Charge Voltage"
-        value_template: "{{ value_json.chargevoltage | default(0) }}"
-        unit_of_measurement: "V"
-        device_class: voltage    
+# OVMS - REST API (dexters-web.de): ODSTRANENE 2026-09-15.
+#   Duplikovalo data z OVMS integracie (sensor.mysan_*), malo neplatne heslo
+#   (server vracal 404 "Authentication failed") a nikde sa nepouzivalo.
+#   OVMS data teraz vyhradne cez integraciu -> sensor.mysan_battery_level, _odometer, _charge_power ...
 
 # ================================
 # FLEXIBILNÉ HELPERS PRE TARÍFNY SYSTÉM + AKVÁRIUM
@@ -872,7 +817,10 @@ command_line:
         - chart_mode
         - chart
         - by_vehicle
+        - by_mode
+        - by_provider
         - vehicles
+        - providers
         - sessions
         - all_count
         - all_kwh
