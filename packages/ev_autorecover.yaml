@@ -18,12 +18,23 @@
 #    binary_sensor.ev_not_charging_problem → ak auto pripojené, nič neblokuje,
 #    ale nabíjačka 8 min nenabíja (zaseknutý "Finishing") → notifikácia na telefón
 #    + HA, že treba reštart ističom. Auto-reset ističa sa spraviť nedá.
+#
+# 3) OBNOVA TRANSAKCIE po výpadku komunikácie (input_boolean.ev_tx_autorestart):
+#    Vestel po reconnecte pošle StopTransaction(PowerLoss), ale auto nabíja ďalej
+#    bez transakcie → nechodia MeterValues. Ak status ostal Charging a session beží,
+#    pošle RemoteStartTransaction (switch.hacharger_charge_control ON), max 2 pokusy.
+#    Session sa nereštartuje (ev_session_start vyžaduje ev_session_active OFF),
+#    register je absolútny → tick aj záverečné zladenie pokračujú správne.
 # ============================================
 
 input_boolean:
   ev_autorecover:
     name: "EV - Auto-recovery zaseknutia"
     icon: mdi:auto-fix
+  # 3) Obnova OCPP transakcie po PowerLoss (viď automáciu ev_tx_autorestart)
+  ev_tx_autorestart:
+    name: "EV - Obnova transakcie po výpadku"
+    icon: mdi:restart
 
 template:
   - binary_sensor:
@@ -151,3 +162,62 @@ automation:
       - service: persistent_notification.dismiss
         data:
           notification_id: ev_not_charging
+
+  # ------------------------------------------------
+  # OBNOVA OCPP TRANSAKCIE po PowerLoss (reconnect nabíjačky počas nabíjania)
+  # ------------------------------------------------
+  - id: ev_tx_autorestart
+    alias: "EV - Obnova transakcie po výpadku"
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: sensor.hacharger_stop_reason
+        to: "PowerLoss"
+        for: { seconds: 20 }
+    condition:
+      - condition: state
+        entity_id: input_boolean.ev_tx_autorestart
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.ev_session_active
+        state: "on"
+      - condition: state
+        entity_id: sensor.hacharger_status_connector
+        state: "Charging"
+      - condition: template
+        value_template: "{{ states('sensor.hacharger_transaction_id') | int(0) == 0 }}"
+    action:
+      - repeat:
+          sequence:
+            - service: logbook.log
+              data:
+                name: "EV Obnova transakcie"
+                message: >
+                  Nabíjačka ukončila transakciu (PowerLoss), auto nabíja ďalej →
+                  RemoteStartTransaction (pokus {{ repeat.index }}).
+            - service: switch.turn_on
+              target: { entity_id: switch.hacharger_charge_control }
+            - wait_template: "{{ states('sensor.hacharger_transaction_id') | int(0) != 0 }}"
+              timeout: { seconds: 90 }
+          until:
+            - condition: template
+              value_template: >
+                {{ states('sensor.hacharger_transaction_id') | int(0) != 0
+                   or repeat.index >= 2
+                   or not is_state('sensor.hacharger_status_connector','Charging')
+                   or is_state('input_boolean.ev_session_active','off') }}
+      - service: logbook.log
+        data:
+          name: "EV Obnova transakcie"
+          message: >
+            {% set t = states('sensor.hacharger_transaction_id') | int(0) %}
+            {{ 'OK — nová transakcia ' ~ t if t != 0 else 'NEÚSPECH — transakcia nebola obnovená (energia sa počíta z OVMS)' }}
+      - service: persistent_notification.create
+        data:
+          notification_id: ev_tx_autorestart
+          title: "EV: výpadok komunikácie nabíjačky"
+          message: >
+            {% set t = states('sensor.hacharger_transaction_id') | int(0) %}
+            {{ now().strftime('%H:%M') }} — nabíjačka ukončila transakciu (PowerLoss).
+            {{ 'Transakcia obnovená (ID ' ~ t ~ '), meranie pokračuje.' if t != 0
+               else 'Obnova sa nepodarila — energia sa dopočíta z OVMS.' }}

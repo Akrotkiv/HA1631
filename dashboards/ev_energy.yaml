@@ -15,6 +15,7 @@ views:
       - type: entities
         title: 🔧 Núdzový manuál
         state_color: true
+        show_header_toggle: false
         entities:
           - entity: input_boolean.ev_manual_mode
             name: "⛔ Vypnúť automatiku (manuál)"
@@ -22,7 +23,8 @@ views:
             label: "Ručné ovládanie (keď je automatika vypnutá)"
           - entity: switch.hacharger_charge_control
             name: "▶ Nabíjať (štart/stop)"
-          - entity: number.hacharger_maximum_current
+          # posuvník 6–32 A (helper; zmena sa prenáša na number.hacharger_maximum_current)
+          - entity: input_number.ev_manual_current
             name: "⚡ Prúd (A)"
 
       # --- Batéria + dojazd (výrazné) ---
@@ -85,10 +87,8 @@ views:
             name: Sieť
           - entity: sensor.gw_surplus
             name: Prebytok
-          - entity: sensor.goodwe_battery_state_of_charge
-            name: Batéria
           - entity: sensor.ev_charging_power
-            name: Nabíjanie
+            name: Nabíjanie OVMS
 
       # --- Aktívna session (len keď nabíja) ---
       - type: conditional
@@ -119,7 +119,7 @@ views:
           - type: markdown
             content: "### 🔌 Ovládanie nabíjania"
 
-          # Režim ako tlačidlá (Fast / Min+Solar / Solar / Vyp)
+          # Režim ako tlačidlá (Fast / Min+Solar / Solar / Vyp / Manuál ON)
           - type: horizontal-stack
             cards:
               - type: custom:button-card
@@ -178,6 +178,22 @@ views:
                     - color: white
                     - background: |
                         [[[ return states['input_select.ev_charge_mode'].state==='Vyp' ? '#b91c1c' : '#1f2937'; ]]]
+              # Manuál ON = to isté ako prepínač „Núdzový manuál“ (input_boolean.ev_manual_mode);
+              # tlačidlo aj prepínač sú prepojené, lebo ovládajú jednu entitu. Ťuknutie prepína ZAP/VYP.
+              - type: custom:button-card
+                entity: input_boolean.ev_manual_mode
+                name: Manuál
+                icon: mdi:hand-back-right
+                show_state: false
+                tap_action:
+                  action: toggle
+                styles:
+                  card:
+                    - border-radius: 10px
+                    - padding: 8px
+                    - color: white
+                    - background: |
+                        [[[ return entity.state==='on' ? '#d97706' : '#1f2937'; ]]]
 
           # Vozidlo ako tlačidlá
           - type: horizontal-stack
@@ -238,6 +254,24 @@ views:
                     - color: white
                     - background: |
                         [[[ return states['input_select.ev_vehicle'].state==='Hosť' ? '#2563eb' : '#1f2937'; ]]]
+
+          # Ďalšie autá (pridané tlačidlom) + pridanie nového auta
+          - type: entities
+            show_header_toggle: false
+            entities:
+              - entity: input_select.ev_vehicle
+                name: "Auto (zoznam vrátane pridaných)"
+              - entity: input_text.ev_vehicle_new
+                name: "↳ Nové auto (názov)"
+              - type: button
+                name: "↳ Pridať auto do zoznamu"
+                icon: mdi:car-plus
+                action_name: Pridať
+                tap_action:
+                  action: call-service
+                  service: script.ev_vehicle_add
+                  data:
+                    select: control
 
           # Cieľ ako tlačidlá (Bez cieľa / SOC / Dojazd)
           - type: horizontal-stack
@@ -487,6 +521,8 @@ views:
             icon: mdi:power-cycle
           - entity: input_boolean.ev_autorecover
             name: Auto-recovery zaseknutia
+          - entity: input_boolean.ev_tx_autorestart
+            name: Obnova transakcie po výpadku
           - entity: binary_sensor.ev_charging_stuck
             name: Nabíjanie zaseknuté
 
@@ -711,17 +747,28 @@ views:
                   vals.forEach(v => { const t=v.a+v.b; if(t>max) max=t; });
                   if (max <= 0) max = 1;
                   const H = 170;
+                  const unit = isCost ? ' €' : ' kWh';
+                  const fmt = (n) => (n < 10 ? n.toFixed(1) : Math.round(n).toString());
+                  const many = vals.length > 14;           // denný pohľad: úzke stĺpce → kompaktné popisky
                   let bars = '';
                   vals.forEach(v => {
                     const ah = Math.round(v.a / max * H), bh = Math.round(v.b / max * H);
                     const tot = v.a + v.b;
-                    let lbl = '';
-                    if (tot >= 0.05) lbl = (tot < 10 ? tot.toFixed(1) : Math.round(tot).toString()) + (isCost ? ' €' : ' kWh');
+                    const pct = tot > 0 ? Math.round(v.a / tot * 100) : 0;
+                    let lbl = '', lbl2 = '', inner = '';
+                    if (tot >= 0.05) {
+                      lbl = fmt(tot) + (many ? '' : unit);
+                      lbl2 = '☀ ' + pct + ' %';
+                      // hodnota slnka priamo v zelenom segmente (ak je dosť vysoký)
+                      if (ah >= 13 && v.a >= 0.05) inner = fmt(v.a) + (many ? '' : unit);
+                    }
+                    const tip = v.x + ': spolu ' + fmt(tot) + unit + ', slnko ' + fmt(v.a) + unit + ' (' + pct + ' %), sieť ' + fmt(v.b) + unit;
                     bars +=
-                      '<div style="flex:1 1 0;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;">' +
-                        '<div style="font-size:11px;line-height:14px;height:14px;white-space:nowrap;color:var(--primary-text-color);">' + lbl + '</div>' +
+                      '<div title="' + tip + '" style="flex:1 1 0;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;">' +
+                        '<div style="font-size:' + (many ? 9 : 11) + 'px;line-height:13px;height:13px;white-space:nowrap;color:var(--primary-text-color);">' + lbl + '</div>' +
+                        '<div style="font-size:' + (many ? 9 : 11) + 'px;line-height:13px;height:13px;white-space:nowrap;color:#21BF73;font-weight:600;">' + lbl2 + '</div>' +
                         '<div style="width:78%;background:#6b7280;height:' + bh + 'px;border-radius:2px 2px 0 0;"></div>' +
-                        '<div style="width:78%;background:#21BF73;height:' + ah + 'px;"></div>' +
+                        '<div style="width:78%;background:#21BF73;height:' + ah + 'px;display:flex;align-items:center;justify-content:center;font-size:' + (many ? 8 : 10) + 'px;color:#06281a;font-weight:600;overflow:hidden;">' + inner + '</div>' +
                         '<div style="font-size:11px;line-height:14px;margin-top:3px;color:var(--secondary-text-color);white-space:nowrap;">' + v.x + '</div>' +
                       '</div>';
                   });
@@ -796,6 +843,108 @@ views:
                     '</div></div>';
                 ]]]
 
+          # --- AC vs DC prehľad (sleduje metriku) ---
+          - type: custom:button-card
+            entity: sensor.ev_sessions_table
+            triggers_update:
+              - input_select.ev_stats_metric
+            show_icon: false
+            show_name: false
+            show_state: false
+            show_label: false
+            tap_action:
+              action: none
+            styles:
+              card:
+                - padding: 14px
+                - border-radius: 12px
+              grid:
+                - grid-template-areas: '"m"'
+                - grid-template-columns: 1fr
+              custom_fields:
+                m:
+                  - justify-self: stretch
+            custom_fields:
+              m: |
+                [[[
+                  const bm = (entity.attributes.by_mode || []);
+                  const isCost = ((states['input_select.ev_stats_metric']||{}).state) === 'Cena';
+                  if (!bm.length) { return '<div style="padding:16px;text-align:center;color:var(--secondary-text-color);">Žiadne dáta</div>'; }
+                  const get = n => bm.find(x => x.name === n) || {energy:0, cost:0, count:0};
+                  const fmt = v => isCost ? (Number(v.cost)||0).toFixed(2)+' €' : (Number(v.energy)||0).toFixed(1)+' kWh';
+                  const cell = (label, color, v) =>
+                    '<div style="flex:1;background:'+color+'22;border:1px solid '+color+';border-radius:10px;padding:10px 12px;">' +
+                      '<div style="font-size:13px;color:var(--secondary-text-color);">'+label+'</div>' +
+                      '<div style="font-size:20px;font-weight:700;color:var(--primary-text-color);">'+fmt(v)+'</div>' +
+                      '<div style="font-size:12px;color:var(--secondary-text-color);">'+(v.count||0)+' session</div>' +
+                    '</div>';
+                  return '<div style="display:flex;flex-direction:column;gap:8px;">' +
+                    '<span style="font-weight:600;font-size:15px;">🔌 AC vs ⚡ DC</span>' +
+                    '<div style="display:flex;gap:10px;">' + cell('🔌 AC', '#4F9DF7', get('AC')) + cell('⚡ DC', '#F5A623', get('DC')) + '</div>' +
+                  '</div>';
+                ]]]
+
+          # --- Donut: podľa poskytovateľa (sleduje metriku) ---
+          - type: custom:button-card
+            entity: sensor.ev_sessions_table
+            triggers_update:
+              - input_select.ev_stats_metric
+            show_icon: false
+            show_name: false
+            show_state: false
+            show_label: false
+            tap_action:
+              action: none
+            styles:
+              card:
+                - padding: 14px
+                - border-radius: 12px
+              grid:
+                - grid-template-areas: '"p"'
+                - grid-template-columns: 1fr
+              custom_fields:
+                p:
+                  - justify-self: stretch
+            custom_fields:
+              p: |
+                [[[
+                  const bp = (entity.attributes.by_provider || []);
+                  const isCost = ((states['input_select.ev_stats_metric']||{}).state) === 'Cena';
+                  const vals = bp.map(v => ({ name: v.name, val: isCost ? (Number(v.cost)||0) : (Number(v.energy)||0) }))
+                                 .filter(v => v.val > 0);
+                  const total = vals.reduce((a,v)=>a+v.val, 0);
+                  if (!total) { return '<div style="padding:24px;text-align:center;color:var(--secondary-text-color);">Žiadne dáta</div>'; }
+                  const palette = ['#21BF73','#4F9DF7','#F5A623','#A66CFF','#FF6B6B','#9CA3AF','#00B8D9','#E67E22'];
+                  const R=58, SW=18, C=2*Math.PI*R, cx=72, cy=72;
+                  let off=0, segs='';
+                  vals.forEach((v,i) => {
+                    const len = v.val/total*C, col = palette[i%palette.length];
+                    segs += '<circle cx="'+cx+'" cy="'+cy+'" r="'+R+'" fill="none" stroke="'+col+'" stroke-width="'+SW+'" stroke-dasharray="'+len.toFixed(2)+' '+(C-len).toFixed(2)+'" stroke-dashoffset="'+(-off).toFixed(2)+'" transform="rotate(-90 '+cx+' '+cy+')"></circle>';
+                    off += len;
+                  });
+                  const center = isCost ? total.toFixed(2)+' €' : Math.round(total)+' kWh';
+                  const svg = '<svg width="144" height="144" viewBox="0 0 144 144">' + segs +
+                    '<text x="'+cx+'" y="'+(cy+5)+'" text-anchor="middle" fill="var(--primary-text-color)" font-size="15" font-weight="700">'+center+'</text></svg>';
+                  let leg='';
+                  vals.forEach((v,i) => {
+                    const col=palette[i%palette.length], pct=Math.round(v.val/total*100);
+                    const valStr = isCost ? v.val.toFixed(2)+' €' : v.val.toFixed(1)+' kWh';
+                    leg += '<div style="display:flex;align-items:center;gap:8px;margin:6px 0;font-size:14px;">' +
+                      '<span style="width:12px;height:12px;border-radius:3px;background:'+col+';flex:none;"></span>' +
+                      '<span style="flex:1;">'+v.name+'</span>' +
+                      '<span style="font-weight:600;">'+valStr+'</span>' +
+                      '<span style="color:var(--secondary-text-color);width:48px;text-align:right;">'+pct+'%</span>' +
+                      '</div>';
+                  });
+                  const title = isCost ? 'Náklady podľa poskytovateľa' : 'Energia podľa poskytovateľa';
+                  return '<div style="display:flex;flex-direction:column;gap:8px;">' +
+                    '<span style="font-weight:600;font-size:15px;">'+title+'</span>' +
+                    '<div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;">' +
+                      '<div style="flex:none;">'+svg+'</div>' +
+                      '<div style="flex:1;min-width:180px;">'+leg+'</div>' +
+                    '</div></div>';
+                ]]]
+
           # --- Filter tabuľky podľa auta (dynamický dropdown — autá z dát) ---
           - type: entities
             show_header_toggle: false
@@ -817,6 +966,12 @@ views:
               - name: Auto
                 data: sessions
                 modify: x.user
+              - name: AC/DC
+                data: sessions
+                modify: x.charge_type
+              - name: Kde
+                data: sessions
+                modify: x.provider
               - name: kWh
                 data: sessions
                 modify: x.energy_kwh
@@ -832,15 +987,31 @@ views:
               - name: Min
                 data: sessions
                 modify: x.charging_min
+              # --- OVMS performance (ev_ovms_perf.py) ---
+              - name: Batéria kWh
+                data: sessions
+                modify: "(x.battery_kwh != null ? x.battery_kwh.toFixed(1) : '–')"
+              - name: Účinnosť
+                data: sessions
+                modify: "(x.efficiency_pct != null ? x.efficiency_pct.toFixed(0) + '%' : '–')"
+              - name: kW Ø/max
+                data: sessions
+                modify: "(x.power_max_kw != null ? (x.power_avg_kw != null ? x.power_avg_kw.toFixed(1) : '–') + ' / ' + x.power_max_kw.toFixed(1) : '–')"
+              - name: T bat
+                data: sessions
+                modify: "(x.bat_temp_start != null ? x.bat_temp_start + '→' + (x.bat_temp_end != null ? x.bat_temp_end : '?') + '°' : '–')"
               - name: SOC
                 data: sessions
                 modify: "(x.soc_end ? x.soc_start + '→' + x.soc_end + '%' : '–')"
               - name: km
                 data: sessions
-                modify: "(x.odo_end ? x.odo_end : '–')"
+                modify: "((x.odo_end || x.odo_start) ? (x.odo_end || x.odo_start) : '–')"
               - name: Koniec
                 data: sessions
                 modify: x.stop_reason
+              - name: Poznámka
+                data: sessions
+                modify: "(x.comment ? x.comment : '')"
             css:
               table+: "width: 100%; border-collapse: collapse;"
               th: "text-align: left; color: var(--secondary-text-color); border-bottom: 1px solid var(--divider-color); padding: 6px;"
@@ -868,3 +1039,220 @@ views:
                 tap_action:
                   action: url
                   url_path: /local/ev_sessions.csv
+
+  # ==========================================================
+  # POHĽAD 3 — PRIDAŤ / UPRAVIŤ SESSION
+  # ==========================================================
+  - title: Pridať / Upraviť
+    path: manual
+    icon: mdi:playlist-edit
+    cards:
+      # =================== DC OD PROVIDERA (auto_dc z OVMS → kWh + cena) ===================
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: >
+              ## ⚡ DC od providera
+
+              {% set p = state_attr('sensor.ev_sessions_table','dc_pending') or [] %}
+              {% if p %}DC nabíjanie zachytí OVMS automaticky. Tu doplň **kWh a cenu z účtu providera**.
+              Cena za kWh sa predvyplní podľa poslednej DC session u poskytovateľa, cena celkom sa prepočíta
+              (dá sa prepísať). Čaká **{{ p | length }}** {{ 'session' if p | length == 1 else 'sessions' }}.
+              {% else %}✅ Žiadna DC session nečaká na údaje od providera.
+              DC nabíjanie, ktoré OVMS nezachytil, pridaj nižšie v **Pridať externú session**.{% endif %}
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: input_select.ev_dc_fill_session
+                state_not: "— žiadna čakajúca DC session —"
+            card:
+              type: entities
+              entities:
+                - entity: input_select.ev_dc_fill_session
+                  name: "Session (OVMS)"
+                - entity: input_select.ev_dc_fill_provider
+                  name: "Poskytovateľ"
+                - entity: input_number.ev_dc_fill_kwh
+                  name: "kWh od providera"
+                - entity: input_number.ev_dc_fill_price
+                  name: "€/kWh"
+                - entity: input_number.ev_dc_fill_cost
+                  name: "Cena celkom (€)"
+                - entity: input_text.ev_dc_fill_comment
+                  name: "Poznámka (miesto)"
+                - type: button
+                  name: "💾 Uložiť DC session"
+                  icon: mdi:content-save-check
+                  action_name: Uložiť
+                  tap_action:
+                    action: call-service
+                    service: script.ev_dc_fill_save
+
+      # =================== PRIDAŤ EXTERNÚ SESSION ===================
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: >
+              ## ➕ Pridať externú session
+
+              Nabíjanie mimo wallboxu. Vlep e-maily zo **štartu** a **konca**
+              nabíjania a stlač **Načítať z e-mailu** (vytiahne kWh, SOC, odometer — ten sa ukladá len raz),
+              alebo vyplň polia ručne. Načítanie nastaví aj dátum na dnes; čas a cenu doplň vždy ručne.
+
+          # --- Vlepenie e-mailov + parse (jeden rámik; načítanie nastaví aj dátum = dnes) ---
+          - type: entities
+            title: 📧 E-maily (voliteľné)
+            entities:
+              - entity: input_text.ev_madd_email_start
+                name: "E-mail ŠTART"
+              - entity: input_text.ev_madd_email_end
+                name: "E-mail KONIEC"
+              - type: button
+                name: "Načítať z e-mailu (+ dátum dnes)"
+                icon: mdi:email-search
+                action_name: Načítať
+                tap_action:
+                  action: call-service
+                  service: script.ev_manual_parse
+
+          # --- Povinné polia ---
+          - type: entities
+            title: 📝 Údaje session
+            entities:
+              - entity: input_datetime.ev_madd_date
+                name: "Dátum"
+              - entity: input_datetime.ev_madd_start
+                name: "Čas ŠTART"
+              - entity: input_datetime.ev_madd_end
+                name: "Čas KONIEC"
+              - entity: input_number.ev_madd_energy
+                name: "Energia (kWh)"
+              - entity: input_number.ev_madd_cost
+                name: "Cena celkom (€)"
+              - entity: input_select.ev_madd_vehicle
+                name: "Auto"
+              - entity: input_text.ev_vehicle_new
+                name: "↳ Nové auto (názov)"
+              - type: button
+                name: "↳ Pridať auto do zoznamu"
+                icon: mdi:car-plus
+                action_name: Pridať
+                tap_action:
+                  action: call-service
+                  service: script.ev_vehicle_add
+                  data:
+                    select: madd
+              - entity: input_select.ev_madd_charge_type
+                name: "AC / DC"
+              - entity: input_select.ev_madd_provider
+                name: "Poskytovateľ"
+              - entity: input_text.ev_provider_new
+                name: "↳ Nový poskytovateľ (názov)"
+              - type: button
+                name: "↳ Pridať do zoznamu poskytovateľov"
+                icon: mdi:store-plus
+                action_name: Pridať
+                tap_action:
+                  action: call-service
+                  service: script.ev_provider_add
+              - type: section
+                label: "Voliteľné (batéria / odometer / poznámka)"
+              - entity: input_number.ev_madd_soc_start
+                name: "SOC štart (%)"
+              - entity: input_number.ev_madd_soc_end
+                name: "SOC koniec (%)"
+              - entity: input_number.ev_madd_odo_end
+                name: "Odometer (km)"
+              - entity: input_text.ev_madd_comment
+                name: "Poznámka"
+
+          - type: button
+            name: 💾 Uložiť session
+            icon: mdi:content-save-plus
+            tap_action:
+              action: call-service
+              service: script.ev_manual_save
+
+      # =================== UPRAVIŤ / ZMAZAŤ ===================
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: >
+              ## ✏️ Upraviť / zmazať session
+
+              Vyber session zo zoznamu (aktuálne zobrazené obdobie z pohľadu
+              *Sessions*). Polia sa načítajú — uprav ich a stlač **Uložiť zmeny**,
+              alebo **Zmazať**. Solar/sieť/tarify sa pri edite zachovajú.
+
+          - type: entities
+            entities:
+              - entity: input_select.ev_edit_session
+                name: "Vyber session"
+
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: input_text.ev_edit_id
+                state_not: ""
+              - condition: state
+                entity: input_text.ev_edit_id
+                state_not: "unknown"
+            card:
+              type: vertical-stack
+              cards:
+                - type: entities
+                  title: 📝 Úprava
+                  entities:
+                    - entity: input_select.ev_edit_vehicle
+                      name: "Auto"
+                    - entity: input_text.ev_vehicle_new
+                      name: "↳ Nové auto (názov)"
+                    - type: button
+                      name: "↳ Pridať auto do zoznamu"
+                      icon: mdi:car-plus
+                      action_name: Pridať
+                      tap_action:
+                        action: call-service
+                        service: script.ev_vehicle_add
+                        data:
+                          select: edit
+                    - entity: input_select.ev_edit_charge_type
+                      name: "AC / DC"
+                    - entity: input_select.ev_edit_provider
+                      name: "Poskytovateľ"
+                    - entity: input_datetime.ev_edit_date
+                      name: "Dátum"
+                    - entity: input_datetime.ev_edit_start
+                      name: "Čas ŠTART"
+                    - entity: input_datetime.ev_edit_end
+                      name: "Čas KONIEC"
+                    - entity: input_number.ev_edit_energy
+                      name: "Energia (kWh)"
+                    - entity: input_number.ev_edit_cost
+                      name: "Cena (€)"
+                    - entity: input_number.ev_edit_soc_start
+                      name: "SOC štart (%)"
+                    - entity: input_number.ev_edit_soc_end
+                      name: "SOC koniec (%)"
+                    - entity: input_number.ev_edit_odo_end
+                      name: "Odometer (km)"
+                    - entity: input_text.ev_edit_comment
+                      name: "Poznámka"
+                    - entity: input_text.ev_edit_stop_reason
+                      name: "Dôvod konca"
+                - type: horizontal-stack
+                  cards:
+                    - type: button
+                      name: 💾 Uložiť zmeny
+                      icon: mdi:content-save-edit
+                      tap_action:
+                        action: call-service
+                        service: script.ev_edit_save
+                    - type: button
+                      name: 🗑️ Zmazať
+                      icon: mdi:trash-can
+                      tap_action:
+                        action: call-service
+                        service: script.ev_edit_delete
+                        confirmation:
+                          text: "Naozaj zmazať túto session z CSV?"

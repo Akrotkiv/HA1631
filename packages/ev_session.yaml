@@ -4,15 +4,17 @@
 #
 # Session = od pripojenia kábla po odpojenie (Charging window).
 # Inkrementálne počítanie každú minútu počas nabíjania:
-#   - energia (kWh) z meter delta
-#   - cena (EUR) += delta_kWh × cena aktuálnej tarify  (presné pri zmene tarify)
-#   - solar/grid split:  solar_share = grid_w / charge_w  (brutto prebytok / nabíjanie;
-#       Vestel nabíjačka nie je v okruhu GoodWe metra, preto NIE evcc charge+grid)
+#   - energia (kWh): prírastok z výkonu auta (OVMS × korekcia), záloha meter delta;
+#       pri stope sa zosúladí s elektromerom nabíjačky, ak je jeho údaj úplný
+#       (pozri komentár v ev_session_tick)
+#   - cena (EUR) += prírastok × cena aktuálnej tarify  (presné pri zmene tarify)
+#   - solar/grid split: každú minútu solar = min(brutto export, PV, výkon nabíjania)
+#       (Vestel nabíjačka nie je v okruhu GoodWe metra, preto NIE evcc charge+grid)
 #   - per-tarifa kWh (T1/T2/T3/T4)
 #   - čas nabíjania (bez páuz — tick beží len keď stav = Charging)
 #   - SOC štart/koniec, odometer štart/koniec
 #
-# Výkon nabíjania sa odvodzuje z meter delta (charger neposiela Power.Active.Import).
+# Výkon nabíjania: z auta (OVMS sensor.mysan_charge_power); charger neposiela Power.Active.Import.
 #
 # CSV: /config/ev_sessions.csv  (nový bohatý formát; starý ev_charging_sessions.csv ostáva)
 #
@@ -49,12 +51,30 @@ input_datetime:
     has_time: true
 
 input_number:
+  # Akumulátory session sú BEZ `initial:` — inak by reštart HA počas nabíjania
+  # vynuloval meter na začiatku (energia = celý register) a session by sa rozbila.
+  # Nulujú sa pri štarte session.
+  # Energia podľa elektromera nabíjačky (kWh) — pri STOPe sa porovná s odhadom
+  ev_session_meter_kwh:
+    name: "EV - Energia elektromer (kWh)"
+    min: 0
+    max: 1000
+    step: 0.001
+    unit_of_measurement: "kWh"
+    mode: box
+  # Korekcia výkonu z auta (OVMS) na energiu zo zásuvky (straty nabíjačky v aute).
+  # Kalibrované 21.–22.11.2026 na 3 session s funkčným elektromerom: 1,086–1,111.
+  ev_ovms_wall_factor:
+    name: "EV - Korekcia OVMS → zásuvka"
+    min: 1
+    max: 1.3
+    step: 0.01
+    mode: box
   ev_session_energy_start:
     name: "EV - Meter na začiatku (kWh)"
     min: 0
     max: 9999999
     step: 0.001
-    initial: 0
     unit_of_measurement: "kWh"
     mode: box
   ev_session_last_meter:
@@ -62,7 +82,6 @@ input_number:
     min: 0
     max: 9999999
     step: 0.001
-    initial: 0
     unit_of_measurement: "kWh"
     mode: box
   ev_session_energy_kwh:
@@ -70,7 +89,6 @@ input_number:
     min: 0
     max: 1000
     step: 0.001
-    initial: 0
     unit_of_measurement: "kWh"
     mode: box
   ev_session_cost_eur:
@@ -78,7 +96,6 @@ input_number:
     min: 0
     max: 1000
     step: 0.0001
-    initial: 0
     unit_of_measurement: "EUR"
     mode: box
   ev_session_solar_kwh:
@@ -86,7 +103,6 @@ input_number:
     min: 0
     max: 1000
     step: 0.001
-    initial: 0
     unit_of_measurement: "kWh"
     mode: box
   ev_session_grid_kwh:
@@ -94,7 +110,6 @@ input_number:
     min: 0
     max: 1000
     step: 0.001
-    initial: 0
     unit_of_measurement: "kWh"
     mode: box
   ev_session_charging_min:
@@ -102,7 +117,6 @@ input_number:
     min: 0
     max: 100000
     step: 1
-    initial: 0
     unit_of_measurement: "min"
     mode: box
   ev_session_t1_kwh:
@@ -110,7 +124,6 @@ input_number:
     min: 0
     max: 1000
     step: 0.001
-    initial: 0
     unit_of_measurement: "kWh"
     mode: box
   ev_session_t2_kwh:
@@ -118,7 +131,6 @@ input_number:
     min: 0
     max: 1000
     step: 0.001
-    initial: 0
     unit_of_measurement: "kWh"
     mode: box
   ev_session_t3_kwh:
@@ -126,7 +138,6 @@ input_number:
     min: 0
     max: 1000
     step: 0.001
-    initial: 0
     unit_of_measurement: "kWh"
     mode: box
   ev_session_t4_kwh:
@@ -134,7 +145,6 @@ input_number:
     min: 0
     max: 1000
     step: 0.001
-    initial: 0
     unit_of_measurement: "kWh"
     mode: box
   ev_session_soc_start:
@@ -142,7 +152,6 @@ input_number:
     min: 0
     max: 100
     step: 1
-    initial: 0
     unit_of_measurement: "%"
     mode: box
   ev_session_odo_start:
@@ -150,7 +159,6 @@ input_number:
     min: 0
     max: 9999999
     step: 1
-    initial: 0
     unit_of_measurement: "km"
     mode: box
 
@@ -182,16 +190,19 @@ template:
           {% elif t == 'T4' %}{{ states('input_number.tariff_t4_price' ~ suffix) | float(0.25) }}
           {% else %}{{ states('input_number.tariff_t1_price' ~ suffix) | float(0.12) }}{% endif %}
 
-      # Live výkon nabíjania (charger neposiela → fallback OVMS kW)
+      # Live výkon nabíjania. Charger reálne posiela Power.Active.Import = 0
+      # (nemeria výkon), preto fallback na OVMS kW nielen pri unavailable/unknown,
+      # ale aj keď je hodnota <= 0. (Bez toho dlaždica "Nabíjanie" visela na 0.00
+      # a ani sa neaktualizovala, lebo template sledoval len hacharger senzor.)
       - name: "EV Charging Power"
         unique_id: ev_charging_power
         unit_of_measurement: "kW"
         device_class: power
         icon: mdi:lightning-bolt
         state: >
-          {% set hp = states('sensor.hacharger_power_active_import') %}
-          {% if hp not in ['unavailable', 'unknown', 'none', None] %}
-            {{ hp | float(0) | round(2) }}
+          {% set hp = states('sensor.hacharger_power_active_import') | float(-1) %}
+          {% if hp > 0 %}
+            {{ hp | round(2) }}
           {% else %}
             {{ states('sensor.mysan_charge_power') | float(0) | round(2) }}
           {% endif %}
@@ -217,7 +228,7 @@ template:
         state: >
           {% set e = states('input_number.ev_session_energy_kwh') | float(0) %}
           {% set s = states('input_number.ev_session_solar_kwh') | float(0) %}
-          {% if e > 0 %}{{ (s / e * 100) | round(0) }}{% else %}0{% endif %}
+          {% if e > 0 %}{{ [s / e * 100, 100] | min | round(0) }}{% else %}0{% endif %}
 
       # Live priemerná cena
       - name: "EV Session Avg Price"
@@ -245,8 +256,19 @@ automation:
         entity_id: input_boolean.ev_session_active
         state: "off"
     action:
+      # počkaj, kým charger pošle StartTransaction (meterStart)
+      - delay: { seconds: 5 }
+      # Základ = meterStart z transakcie (čerstvý, < 3 min). Register býva zastaraný —
+      # Vestel posiela MeterValues nepravidelne, takže by do session prenikla energia
+      # z predchádzajúceho nabíjania (23.11.: +4,2 kWh z nočnej session).
       - variables:
-          meter: "{{ states('sensor.hacharger_energy_active_import_register') | float(0) | round(3) }}"
+          meter: >
+            {% set ms = states.sensor.hacharger_energy_meter_start %}
+            {% set reg = states('sensor.hacharger_energy_active_import_register') | float(0) %}
+            {% if ms is not none and ms.state | float(0) > 0
+                  and (now() - ms.last_updated).total_seconds() < 180 %}
+              {{ ms.state | float(0) | round(3) }}
+            {% else %}{{ reg | round(3) }}{% endif %}
       - service: input_boolean.turn_on
         target: { entity_id: input_boolean.ev_session_active }
       - service: input_text.set_value
@@ -274,14 +296,13 @@ automation:
             - input_number.ev_session_t2_kwh
             - input_number.ev_session_t3_kwh
             - input_number.ev_session_t4_kwh
+            - input_number.ev_session_meter_kwh
         data: { value: 0 }
-      # Snapshot SOC + odometer (len pre mysan — ostatné vozidlá nemajú senzory)
+      # Snapshot SOC (len pre mysan — ostatné vozidlá nemajú senzory).
+      # Odometer sa zapisuje len raz (na konci session) — auto počas nabíjania nejazdí.
       - service: input_number.set_value
         target: { entity_id: input_number.ev_session_soc_start }
         data: { value: "{{ states('sensor.mysan_battery_level') | float(0) | round(0) if states('input_select.ev_vehicle') == 'mysan' else 0 }}" }
-      - service: input_number.set_value
-        target: { entity_id: input_number.ev_session_odo_start }
-        data: { value: "{{ states('sensor.mysan_odometer') | float(0) | round(0) if states('input_select.ev_vehicle') == 'mysan' else 0 }}" }
       - service: logbook.log
         data:
           name: "EV Session"
@@ -308,57 +329,61 @@ automation:
       - condition: state
         entity_id: sensor.hacharger_status_connector
         state: "Charging"
-      - condition: template
-        value_template: >
-          {{ states('sensor.hacharger_energy_active_import_register') not in ['unknown', 'unavailable'] }}
+    # ENERGIA — dva zdroje:
+    #  a) elektromer nabíjačky (presný, ALE Vestel posiela MeterValues len počas
+    #     OCPP transakcie; po reconnecte ju ukončí "PowerLoss" a nabíja ďalej
+    #     bez transakcie → elektromer v HA stojí. 23.11. tak chýbalo 4,2 aj ~8 kWh.)
+    #  b) výkon z auta (OVMS, každú minútu) × korekcia na zásuvku
+    #     (input_number.ev_ovms_wall_factor, ~1,10 = straty nabíjačky v aute)
+    # Každú minútu sa pripočíta prírastok z b) (záloha: delta elektromera),
+    # rovnako cena podľa aktuálnej tarify, kWh tarify a solar/sieť.
+    # Pri STOPe: ak elektromer pokryl ≥ 80 % odhadu → všetko sa preškáluje
+    # na presnú hodnotu elektromera; inak ostáva odhad z OVMS.
+    #
+    # SOLAR: solar_w = clamp(min(brutto export, PV, výkon nabíjania), 0)
+    #   (Vestel nie je v okruhu GoodWe metra → export je brutto, EV ho nevidí;
+    #    strop PV: v noci výboj batérie do exportu nie je solar)
     action:
       - variables:
-          meter_now: "{{ states('sensor.hacharger_energy_active_import_register') | float(0) }}"
+          reg: "{{ states('sensor.hacharger_energy_active_import_register') }}"
           last: "{{ states('input_number.ev_session_last_meter') | float(0) }}"
           start: "{{ states('input_number.ev_session_energy_start') | float(0) }}"
-          delta: "{{ [states('sensor.hacharger_energy_active_import_register') | float(0) - (states('input_number.ev_session_last_meter') | float(0)), 0] | max }}"
+          meter_now: "{{ [reg | float(0), last] | max if reg not in ['unknown', 'unavailable'] else last }}"
+          delta: "{{ [meter_now | float(0) - last, 0] | max }}"
           grid_w: "{{ states('sensor.gw_grid_power') | float(0) }}"
+          pv_w: "{{ states('sensor.gw_pv_power') | float(0) }}"
           price: "{{ states('sensor.ev_cena_kwh') | float(0.15) }}"
           tariff: "{{ states('sensor.ev_tarifa') | lower }}"
-      # charge power (W) z delta za 60s tick.
-      # Vestel nabíjačka NIE je v okruhu GoodWe energymetra → grid_w (brutto export)
-      # nevidí odber auta. Solar podiel = min(brutto prebytok, výkon nabíjania) / nabíjanie,
-      # t.j. solar_share = clamp(grid_w / charge_w, 0..1). (Klasický evcc vzorec
-      # charge+grid platí len ak meter EV vidí; tu by nadhodnocoval solar na 100 %.)
-      - variables:
-          charge_w: "{{ (delta | float(0)) * 60000 }}"
-          # Solar podiel = clamp(min(brutto_export, PV_výkon) / nabíjanie, 0..1).
-          # Strop PV je nutný: v noci výboj batérie tlačí grid do exportu a bez
-          # neho by sa to počítalo ako solar (PV=0 → solar 0).
-          solar_share: >
-            {% set cw = (delta | float(0)) * 60000 %}
-            {% set pv = states('sensor.gw_pv_power') | float(0) %}
-            {% set sw = [grid_w | float(0), pv] | min %}
-            {% if cw > 0 %}
-              {{ [[ sw / cw, 1] | min, 0] | max }}
-            {% else %}0{% endif %}
-      # Total energia (presné z meter delta od štartu)
+          ovms_kw: >
+            {{ states('sensor.mysan_charge_power') | float(0)
+               if states('input_select.ev_vehicle') == 'mysan' else 0 }}
+          k: "{{ states('input_number.ev_ovms_wall_factor') | float(1.10) }}"
+          inc: >
+            {{ (ovms_kw | float(0) * k | float(1.10) / 60) if ovms_kw | float(0) > 0
+               else delta | float(0) }}
+          solar_inc: >
+            {{ [[grid_w | float(0), pv_w | float(0), inc | float(0) * 60000] | min, 0] | max / 60000 }}
       - service: input_number.set_value
-        target: { entity_id: input_number.ev_session_energy_kwh }
-        data: { value: "{{ (meter_now - start) | round(3) }}" }
+        target: { entity_id: input_number.ev_session_meter_kwh }
+        data: { value: "{{ [meter_now | float(0) - start, 0] | max | round(3) }}" }
       - service: input_number.set_value
         target: { entity_id: input_number.ev_session_last_meter }
-        data: { value: "{{ meter_now | round(3) }}" }
-      # Cena (inkrementálne)
+        data: { value: "{{ meter_now | float(0) | round(3) }}" }
+      - service: input_number.set_value
+        target: { entity_id: input_number.ev_session_energy_kwh }
+        data: { value: "{{ (states('input_number.ev_session_energy_kwh') | float(0) + inc | float(0)) | round(4) }}" }
       - service: input_number.set_value
         target: { entity_id: input_number.ev_session_cost_eur }
-        data: { value: "{{ (states('input_number.ev_session_cost_eur') | float(0) + delta | float(0) * price | float(0)) | round(4) }}" }
-      # Solar / grid split
+        data: { value: "{{ (states('input_number.ev_session_cost_eur') | float(0) + inc | float(0) * price | float(0)) | round(4) }}" }
       - service: input_number.set_value
         target: { entity_id: input_number.ev_session_solar_kwh }
-        data: { value: "{{ (states('input_number.ev_session_solar_kwh') | float(0) + delta | float(0) * solar_share | float(0)) | round(3) }}" }
+        data: { value: "{{ (states('input_number.ev_session_solar_kwh') | float(0) + solar_inc | float(0)) | round(4) }}" }
       - service: input_number.set_value
         target: { entity_id: input_number.ev_session_grid_kwh }
-        data: { value: "{{ (states('input_number.ev_session_grid_kwh') | float(0) + delta | float(0) * (1 - solar_share | float(0))) | round(3) }}" }
-      # Per-tarifa kWh (templated entity_id: t1..t4)
+        data: { value: "{{ (states('input_number.ev_session_grid_kwh') | float(0) + inc | float(0) - solar_inc | float(0)) | round(4) }}" }
       - service: input_number.set_value
         target: { entity_id: "input_number.ev_session_{{ tariff }}_kwh" }
-        data: { value: "{{ (states('input_number.ev_session_' ~ tariff ~ '_kwh') | float(0) + delta | float(0)) | round(3) }}" }
+        data: { value: "{{ (states('input_number.ev_session_' ~ tariff ~ '_kwh') | float(0) + inc | float(0)) | round(4) }}" }
       # Čas nabíjania (+1 min, len keď Charging → pauzy sa nepočítajú)
       - service: input_number.set_value
         target: { entity_id: input_number.ev_session_charging_min }
@@ -379,32 +404,42 @@ automation:
         entity_id: input_boolean.ev_session_active
         state: "on"
     action:
+      # ZOSÚLADENIE odhadu (OVMS) s elektromerom nabíjačky — pozri ev_session_tick.
+      # Elektromer je presný, ak pokryl ≥ 80 % odhadu → odhad (cena, tarify,
+      # solar/sieť) sa preškáluje na jeho hodnotu (f). Inak ostáva odhad z OVMS.
       - variables:
-          energy: "{{ states('input_number.ev_session_energy_kwh') | float(0) | round(3) }}"
-          cost: "{{ states('input_number.ev_session_cost_eur') | float(0) | round(3) }}"
-          solar: "{{ states('input_number.ev_session_solar_kwh') | float(0) | round(3) }}"
-          grid: "{{ states('input_number.ev_session_grid_kwh') | float(0) | round(3) }}"
-          solar_pct: >
-            {% set e = states('input_number.ev_session_energy_kwh') | float(0) %}
-            {% set s = states('input_number.ev_session_solar_kwh') | float(0) %}
-            {{ (s / e * 100) | round(0) if e > 0 else 0 }}
-          avg_price: >
-            {% set e = states('input_number.ev_session_energy_kwh') | float(0) %}
-            {% set c = states('input_number.ev_session_cost_eur') | float(0) %}
-            {{ (c / e) | round(4) if e > 0 else 0 }}
+          ee: "{{ states('input_number.ev_session_energy_kwh') | float(0) }}"
+          me: >
+            {% set reg = states('sensor.hacharger_energy_active_import_register') %}
+            {% set last = states('input_number.ev_session_last_meter') | float(0) %}
+            {% set now_m = [reg | float(0), last] | max if reg not in ['unknown','unavailable'] else last %}
+            {{ [now_m - states('input_number.ev_session_energy_start') | float(0), 0] | max | round(3) }}
+          use_meter: "{{ me | float(0) > 0 and (ee | float(0) <= 0 or me | float(0) >= 0.8 * ee | float(0)) }}"
+          f: "{{ (me | float(0) / ee | float(0)) if (use_meter and ee | float(0) > 0) else 1 }}"
+          cur_t: "{{ states('sensor.ev_tarifa') | lower }}"
+          energy_src: "{{ 'elektromer' if use_meter else 'OVMS odhad' }}"
+      - variables:
+          energy: "{{ (me | float(0) if use_meter else ee | float(0)) | round(3) }}"
+          cost: >
+            {% if ee | float(0) > 0 %}{{ (states('input_number.ev_session_cost_eur') | float(0) * f | float(1)) | round(3) }}
+            {% else %}{{ (me | float(0) * states('sensor.ev_cena_kwh') | float(0.15)) | round(3) }}{% endif %}
+          solar: "{{ (states('input_number.ev_session_solar_kwh') | float(0) * f | float(1)) | round(3) if ee | float(0) > 0 else 0 }}"
+          grid: "{{ (energy | float(0) - solar | float(0)) | round(3) }}"
+          solar_pct: "{{ (solar | float(0) / energy | float(0) * 100) | round(0) if energy | float(0) > 0 else 0 }}"
+          avg_price: "{{ (cost | float(0) / energy | float(0)) | round(4) if energy | float(0) > 0 else 0 }}"
+          t1: "{{ (states('input_number.ev_session_t1_kwh') | float(0) * f | float(1)) | round(3) if ee | float(0) > 0 else (energy if cur_t == 't1' else 0) }}"
+          t2: "{{ (states('input_number.ev_session_t2_kwh') | float(0) * f | float(1)) | round(3) if ee | float(0) > 0 else (energy if cur_t == 't2' else 0) }}"
+          t3: "{{ (states('input_number.ev_session_t3_kwh') | float(0) * f | float(1)) | round(3) if ee | float(0) > 0 else (energy if cur_t == 't3' else 0) }}"
+          t4: "{{ (states('input_number.ev_session_t4_kwh') | float(0) * f | float(1)) | round(3) if ee | float(0) > 0 else (energy if cur_t == 't4' else 0) }}"
           session_id: "{{ states('input_text.ev_session_id') }}"
           start_time: "{{ states('input_datetime.ev_session_start_time') }}"
           end_time: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
           user: "{{ states('input_select.ev_vehicle') }}"
           charging_min: "{{ states('input_number.ev_session_charging_min') | int(0) }}"
-          t1: "{{ states('input_number.ev_session_t1_kwh') | float(0) | round(3) }}"
-          t2: "{{ states('input_number.ev_session_t2_kwh') | float(0) | round(3) }}"
-          t3: "{{ states('input_number.ev_session_t3_kwh') | float(0) | round(3) }}"
-          t4: "{{ states('input_number.ev_session_t4_kwh') | float(0) | round(3) }}"
           # SOC/odometer len pre mysan (MG/OVMS) — ostatné vozidlá nemajú senzory → prázdne
           soc_start: "{{ states('input_number.ev_session_soc_start') | int(0) if user == 'mysan' else '' }}"
           soc_end: "{{ states('sensor.mysan_battery_level') | int(0) if user == 'mysan' else '' }}"
-          odo_start: "{{ states('input_number.ev_session_odo_start') | int(0) if user == 'mysan' else '' }}"
+          odo_start: ""
           odo_end: "{{ states('sensor.mysan_odometer') | int(0) if user == 'mysan' else '' }}"
           stop_reason: >
             {% set s = trigger.to_state.state %}
@@ -439,11 +474,13 @@ automation:
           odo_start: "{{ odo_start }}"
           odo_end: "{{ odo_end }}"
           stop_reason: "{{ stop_reason }}"
+          charge_type: "AC"
+          provider: "Home"
       - service: persistent_notification.create
         data:
           title: "🔌 EV Session ukončená"
           message: >
-            {{ energy }} kWh — {{ cost }} EUR ({{ avg_price }} €/kWh)
+            {{ energy }} kWh ({{ energy_src }}) — {{ cost }} EUR ({{ avg_price }} €/kWh)
             ☀️ Solar {{ solar_pct }}% | ⏱ {{ charging_min }} min
             🔋 {{ soc_start }}→{{ soc_end }}% | {{ odo_end }} km | {{ stop_reason }}
           notification_id: ev_session_done
@@ -451,7 +488,7 @@ automation:
         data:
           name: "EV Session"
           message: >
-            ■ {{ session_id }} koniec — {{ energy }} kWh / {{ cost }} EUR /
+            ■ {{ session_id }} koniec — {{ energy }} kWh ({{ energy_src }}; elektromer {{ me }}, OVMS {{ ee | float(0) | round(3) }}) / {{ cost }} EUR /
             solar {{ solar_pct }}% / {{ charging_min }} min / {{ stop_reason }}
 
 # POZN.: HA shell_command pri template-och nespúšťa cez shell (žiadne && ; > >>),
@@ -464,3 +501,4 @@ shell_command:
     "{{ solar }}" "{{ grid }}" "{{ solar_pct }}"
     "{{ t1 }}" "{{ t2 }}" "{{ t3 }}" "{{ t4 }}"
     "{{ soc_start }}" "{{ soc_end }}" "{{ odo_start }}" "{{ odo_end }}" "{{ stop_reason }}"
+    "{{ charge_type }}" "{{ provider }}"
