@@ -449,6 +449,9 @@ views:
             name: Vynechať T3
           - entity: input_boolean.ev_skip_t4
             name: Vynechať T4
+          - type: divider
+          - entity: input_boolean.ev_solar_ignore_skip
+            name: Solar ignoruje vynechanie
 
       # --- Manuál & diagnostika ---
       - type: entities
@@ -499,6 +502,12 @@ views:
             name: Prah pauzy (Solar)
           - entity: input_number.ev_solar_resume_threshold_w
             name: Prah obnovenia (Solar)
+          - entity: input_number.ev_solar_grid_share_pct
+            name: Max podiel zo siete
+          - entity: binary_sensor.ev_solar_surplus_low
+            name: Prebytok pod prahom pauzy
+          - entity: binary_sensor.ev_solar_surplus_ok
+            name: Prebytok nad prahom obnovenia
 
       # --- Súhrn ---
       - type: markdown

@@ -7,14 +7,26 @@
 # REŽIMY (input_select.ev_charge_mode):
 #   Fast       = max prúd (ev_solar_max_current, napr. 32A), ignoruje tarifu/prebytky
 #   Min+Solar  = vždy aspoň min prúd, navyšuje o prebytky (do max)
-#   Solar      = len z prebytkov, pauza pod min
+#   Solar      = len z prebytkov, pauza pod prahom pauzy
 #   Vyp        = nenabíjať (manuálny blok)
+#
+# PODIEL ZO SIETE (input_number.ev_solar_grid_share_pct, 0–50 %):
+#   Solar aj Min+Solar nabíjajú výkonom = prebytok / (1 − podiel).
+#   0 % = nikdy viac ako prebytok; 50 % = až 2× prebytok (polovica zo siete).
+#   Pri 50 % a dennej cene ≤ 2× nočná vyjde kWh max za cenu noci.
+#
+# PRAHY PAUZY / OBNOVENIA (W prebytku, nie výkon nabíjania):
+#   Solar pauza    = prebytok < ev_solar_pause_threshold_w  ≥ 5 min
+#   Solar obnova   = prebytok > ev_solar_resume_threshold_w ≥ 3 min
+#   Hodnoty sa pamätajú cez reštart (bez `initial:`).
 #
 # CIEĽ (input_select.ev_target_type):
 #   Žiadny | SOC (ev_soc_limit %) | Range (ev_target_range_km, podľa estimated_range)
 #
 # SKIP TARIFY (input_boolean.ev_skip_t1..t4):
 #   pri štarte v zakázanej tarife → blok, obnova keď nastane povolená
+#   input_boolean.ev_solar_ignore_skip ON → v režime Solar sa vynechanie
+#   tarify ignoruje (nabíja sa z prebytkov v ľubovoľnej tarife)
 #
 # VOZIDLO (input_select.ev_vehicle): mysan / vojtesla / Petschka / Hosť
 #   detekcia po štarte cez binary_sensor.mysan_charging_status (OVMS AC)
@@ -75,6 +87,9 @@ input_boolean:
   ev_scheduled_enabled:
     name: "EV - Plánované nabíjanie"
     icon: mdi:clock-outline
+  ev_solar_ignore_skip:
+    name: "EV - Solar ignoruje vynechanie tarify"
+    icon: mdi:solar-power-variant
 
 input_number:
   ev_solar_min_current:
@@ -93,22 +108,30 @@ input_number:
     initial: 32
     unit_of_measurement: "A"
     mode: slider
+  # BEZ `initial:` — inak HA pri každom reštarte/reloade prepíše hodnotu
+  # nastavenú v dashboarde (to bol dôvod, prečo sa prahy "vracali").
   ev_solar_pause_threshold_w:
     name: "EV - Prah pauzy (W)"
     min: 0
     max: 3000
-    step: 100
-    initial: 1300
+    step: 50
     unit_of_measurement: "W"
     mode: box
   ev_solar_resume_threshold_w:
     name: "EV - Prah obnovenia (W)"
-    min: 500
+    min: 0
     max: 5000
-    step: 100
-    initial: 1400
+    step: 50
     unit_of_measurement: "W"
     mode: box
+  ev_solar_grid_share_pct:
+    name: "EV - Max podiel zo siete (%)"
+    min: 0
+    max: 50
+    step: 5
+    unit_of_measurement: "%"
+    mode: slider
+    icon: mdi:transmission-tower-import
   ev_soc_limit:
     name: "EV - Cieľ SOC (%)"
     min: 20
@@ -155,23 +178,31 @@ template:
           {% set surplus = states('sensor.gw_surplus') | float(0) %}
           {% set mn = states('input_number.ev_solar_min_current') | int(6) %}
           {% set mx = states('input_number.ev_solar_max_current') | int(32) %}
-          {% set sa = (surplus / 230) | int(0) %}
+          {% set share = [[states('input_number.ev_solar_grid_share_pct') | float(0), 0] | max, 90] | min / 100 %}
+          {% set sa = (surplus / (1 - share) / 230) | int(0) %}
+          {% set pause_w = states('input_number.ev_solar_pause_threshold_w') | float(0) %}
           {% if mode == 'Fast' %}{{ mx }}
-          {% elif mode == 'Min+Solar' %}{{ [[ [sa, mn] | max, mx] | min, mn] | max }}
-          {% elif mode == 'Solar' %}{% if sa < mn %}0{% else %}{{ [sa, mx] | min }}{% endif %}
+          {% elif mode == 'Min+Solar' %}{{ [[sa, mn] | max, mx] | min }}
+          {% elif mode == 'Solar' %}{% if surplus < pause_w %}0{% else %}{{ [[sa, mn] | max, mx] | min }}{% endif %}
           {% else %}0{% endif %}
+        attributes:
+          charge_power_w: >
+            {% set share = [[states('input_number.ev_solar_grid_share_pct') | float(0), 0] | max, 90] | min / 100 %}
+            {{ (states('sensor.gw_surplus') | float(0) / (1 - share)) | round(0) }}
 
       # Je aktuálna tarifa povolená (nie v skip)?
+      # Solar + ev_solar_ignore_skip → vždy povolená (nabíja len z prebytkov).
       - name: "EV Tariff Allowed"
         unique_id: ev_tariff_allowed
         icon: mdi:check-decagram
         state: >
+          {% if is_state('input_select.ev_charge_mode','Solar') and is_state('input_boolean.ev_solar_ignore_skip','on') %}true{% else %}
           {% set skip = false %}
           {% if is_state('binary_sensor.t1_aktivna','on') and is_state('input_boolean.ev_skip_t1','on') %}{% set skip = true %}{% endif %}
           {% if is_state('binary_sensor.t2_aktivna','on') and is_state('input_boolean.ev_skip_t2','on') %}{% set skip = true %}{% endif %}
           {% if is_state('binary_sensor.t3_aktivna','on') and is_state('input_boolean.ev_skip_t3','on') %}{% set skip = true %}{% endif %}
           {% if is_state('binary_sensor.t4_aktivna','on') and is_state('input_boolean.ev_skip_t4','on') %}{% set skip = true %}{% endif %}
-          {{ 'false' if skip else 'true' }}
+          {{ 'false' if skip else 'true' }}{% endif %}
 
       # Cieľ dosiahnutý?
       - name: "EV Target Reached"
@@ -186,6 +217,27 @@ template:
           {% elif tt == 'kWh' %}
             {{ 'true' if states('input_number.ev_session_energy_kwh') | float(0) >= states('input_number.ev_kwh_limit') | float(999) else 'false' }}
           {% else %}false{% endif %}
+
+  - binary_sensor:
+      # Prebytok pod prahom pauzy (ustálený 5 min) — spúšťač Solar pauzy.
+      # Stavový senzor (nie numeric_state trigger), aby pauza fungovala aj keď
+      # nabíjanie začne / režim sa prepne v čase, keď je prebytok už nízko.
+      - name: "EV Solar Surplus Low"
+        unique_id: ev_solar_surplus_low
+        icon: mdi:solar-power-variant-outline
+        state: >
+          {{ states('sensor.gw_surplus') | float(0) < states('input_number.ev_solar_pause_threshold_w') | float(0) }}
+        delay_on:
+          minutes: 5
+
+      # Prebytok nad prahom obnovenia (ustálený 3 min) — spúšťač Solar obnovenia.
+      - name: "EV Solar Surplus OK"
+        unique_id: ev_solar_surplus_ok
+        icon: mdi:solar-power-variant
+        state: >
+          {{ states('sensor.gw_surplus') | float(0) > states('input_number.ev_solar_resume_threshold_w') | float(0) }}
+        delay_on:
+          minutes: 3
 
 # ================================
 # AUTOMÁCIE
@@ -222,8 +274,12 @@ automation:
         entity_id: sensor.ev_tariff_allowed
         state: "true"
     action:
+      # Solar pod prahom pauzy hlási 0 → kým pauza nenastane, drž min prúd
+      # (predtým ostal visieť posledný vysoký prúd až 5 min zo siete).
       - variables:
-          target_a: "{{ states('sensor.ev_target_current') | int(0) }}"
+          target_a: >
+            {{ [states('sensor.ev_target_current') | int(0),
+                states('input_number.ev_solar_min_current') | int(6)] | max }}
           current_a: "{{ states('number.hacharger_maximum_current') | int(0) }}"
       - condition: template
         value_template: "{{ target_a >= 6 and target_a != current_a }}"
@@ -240,12 +296,24 @@ automation:
     alias: "EV - Solar pauza"
     mode: single
     trigger:
-      - platform: numeric_state
-        entity_id: sensor.gw_surplus
-        below: input_number.ev_solar_pause_threshold_w
+      - platform: state
+        entity_id: binary_sensor.ev_solar_surplus_low
+        to: "on"
+      # nabíjanie beží / prepnuté na Solar už pri nízkom prebytku
+      - platform: state
+        entity_id: sensor.hacharger_status_connector
+        to: "Charging"
         for:
-          minutes: 5
+          minutes: 2
+      - platform: state
+        entity_id: input_select.ev_charge_mode
+        to: "Solar"
+        for:
+          minutes: 1
     condition:
+      - condition: state
+        entity_id: binary_sensor.ev_solar_surplus_low
+        state: "on"
       - condition: state
         entity_id: input_select.ev_charge_mode
         state: "Solar"
@@ -278,12 +346,19 @@ automation:
     alias: "EV - Solar obnovenie"
     mode: single
     trigger:
-      - platform: numeric_state
-        entity_id: sensor.gw_surplus
-        above: input_number.ev_solar_resume_threshold_w
+      - platform: state
+        entity_id: binary_sensor.ev_solar_surplus_ok
+        to: "on"
+      # blok prešiel na "surplus" (napr. z tarify) keď už je prebytok OK
+      - platform: state
+        entity_id: input_select.ev_block_reason
+        to: "surplus"
         for:
-          minutes: 3
+          seconds: 30
     condition:
+      - condition: state
+        entity_id: binary_sensor.ev_solar_surplus_ok
+        state: "on"
       - condition: state
         entity_id: input_select.ev_charge_mode
         state: "Solar"
@@ -354,6 +429,30 @@ automation:
                 data:
                   name: "EV Control"
                   message: "🚫 Zakázaná tarifa {{ states('sensor.ev_tarifa') }} → stop"
+          # Povolená tarifa, ale režim Solar a málo prebytkov → len prepíš
+          # dôvod na "surplus" (obnoví Solar obnovenie, keď prebytky prídu)
+          - conditions:
+              - condition: state
+                entity_id: input_select.ev_block_reason
+                state: "tariff"
+              - condition: state
+                entity_id: sensor.ev_tariff_allowed
+                state: "true"
+              - condition: state
+                entity_id: input_select.ev_charge_mode
+                state: "Solar"
+              - condition: template
+                value_template: >
+                  {{ states('sensor.gw_surplus') | float(0)
+                     <= states('input_number.ev_solar_resume_threshold_w') | float(0) }}
+            sequence:
+              - service: input_select.select_option
+                target: { entity_id: input_select.ev_block_reason }
+                data: { option: "surplus" }
+              - service: logbook.log
+                data:
+                  name: "EV Control"
+                  message: "⏸ Tarifa povolená, ale Solar a prebytky {{ states('sensor.gw_surplus') }}W → čakám na prebytky"
           # Nastala POVOLENÁ tarifa a bolo blokované kvôli tarife → obnov
           - conditions:
               - condition: state
@@ -563,6 +662,38 @@ automation:
               - service: input_select.select_option
                 target: { entity_id: input_select.ev_block_reason }
                 data: { option: "none" }
+          # Solar pauza (surplus) a prepnuté na Fast / Min+Solar → pauza už neplatí
+          - conditions:
+              - condition: state
+                entity_id: input_select.ev_block_reason
+                state: "surplus"
+              - condition: state
+                entity_id: input_select.ev_charge_mode
+                state: ["Fast", "Min+Solar"]
+              - condition: not
+                conditions:
+                  - condition: state
+                    entity_id: sensor.hacharger_status_connector
+                    state: "Available"
+            sequence:
+              - delay: { seconds: 2 }   # nech sa ustáli sensor.ev_tariff_allowed
+              - if:
+                  - condition: state
+                    entity_id: sensor.ev_tariff_allowed
+                    state: "true"
+                then:
+                  - service: switch.turn_on
+                    target: { entity_id: switch.hacharger_availability }
+                  - service: input_boolean.turn_off
+                    target: { entity_id: input_boolean.ev_charging_blocked }
+                  - service: input_select.select_option
+                    target: { entity_id: input_select.ev_block_reason }
+                    data: { option: "none" }
+                else:
+                  # zakázaná tarifa → ostáva blok, ale už kvôli tarife
+                  - service: input_select.select_option
+                    target: { entity_id: input_select.ev_block_reason }
+                    data: { option: "tariff" }
 
   # ------------------------------------------------
   # ODPOJENIE — reset celého stavu
