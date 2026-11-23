@@ -20,7 +20,8 @@ from openpyxl.utils import get_column_letter
 
 NUMERIC = {"energy_kwh", "charging_min", "cost_eur", "avg_price", "solar_kwh",
            "grid_kwh", "solar_pct", "t1_kwh", "t2_kwh", "t3_kwh", "t4_kwh",
-           "soc_start", "soc_end", "odo_start", "odo_end"}
+           "soc_start", "soc_end", "odo_start", "odo_end",
+           "battery_kwh", "efficiency_pct", "power_avg_kw", "power_max_kw", "car_eff_pct", "bat_temp_start", "bat_temp_end", "soh"}
 
 HEADERS_SK = {
     "session_id": "ID", "start": "Začiatok", "end": "Koniec", "user": "Auto",
@@ -29,6 +30,10 @@ HEADERS_SK = {
     "t1_kwh": "T1", "t2_kwh": "T2", "t3_kwh": "T3", "t4_kwh": "T4",
     "soc_start": "SOC od", "soc_end": "SOC do", "odo_start": "km od",
     "odo_end": "km do", "stop_reason": "Dôvod konca",
+    "charge_type": "AC/DC", "provider": "Poskytovateľ", "comment": "Poznámka",
+    "battery_kwh": "Do batérie kWh", "efficiency_pct": "Účinnosť %",
+    "power_avg_kw": "Ø kW", "power_max_kw": "Max kW", "car_eff_pct": "Účinn. auta %",
+    "bat_temp_start": "T bat od °C", "bat_temp_end": "T bat do °C", "soh": "SOH %",
 }
 
 
@@ -71,6 +76,8 @@ def main():
         w = max(len(str(HEADERS_SK.get(key, key))), 9)
         if key in ("start", "end"):
             w = 18
+        elif key == "comment":
+            w = 30
         elif key == "session_id":
             w = 16
         ws.column_dimensions[get_column_letter(ci)].width = w + 2

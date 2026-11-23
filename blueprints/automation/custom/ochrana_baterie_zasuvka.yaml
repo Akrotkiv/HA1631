@@ -1,0 +1,310 @@
+blueprint:
+  name: Ochrana batérie – cyklovanie zásuvky podľa odberu
+  description: >-
+    Chráni batériu zariadenia, ktoré je trvalo v zásuvke. Keď odber (prúd alebo
+    výkon) klesne pod nastavenú hranicu a vydrží pod ňou zvolený čas – batéria je
+    nabitá – zásuvka sa vypne.
+
+
+    Znovu sa zapne podľa toho, čo si nastavíte: po uplynutí doby vypnutia,
+    podľa senzora batérie, alebo ľubovoľným vlastným spúšťačom (čas, tlačidlo,
+    iný senzor…). Spôsoby sa dajú kombinovať.
+
+
+    Poznámka: ak je zapnutý časovač, zásuvka sa po uplynutí doby vypnutia zapne
+    aj vtedy, keď ste ju vypli ručne.
+  domain: automation
+  input:
+    plug:
+      name: Zásuvka
+      description: Spínač Zigbee zásuvky, ktorý sa bude vypínať a zapínať.
+      selector:
+        entity:
+          filter:
+            - domain: switch
+    load_sensor:
+      name: Senzor odberu
+      description: >-
+        Senzor prúdu (A) alebo výkonu (W) tej istej zásuvky. Výkon býva pri malých
+        odberoch presnejší než prúd.
+      selector:
+        entity:
+          filter:
+            - domain: sensor
+              device_class:
+                - power
+                - current
+    threshold:
+      name: Hranica odberu
+      description: >-
+        Pod touto hodnotou sa batéria považuje za nabitú. Zadajte ju v tých
+        jednotkách, ktoré senzor práve ukazuje (W, A alebo mA) – pri zmene
+        jednotky senzora treba zmeniť aj hranicu. Nastavte ju mierne nad odber,
+        ktorý zariadenie má po plnom nabití – zistíte ho z histórie senzora.
+      default: 5
+      selector:
+        number:
+          min: 0
+          max: 3000
+          step: 0.01
+          mode: box
+    drop_from:
+      name: Vypnúť len pri poklese z hodnoty (voliteľné)
+      description: >-
+        Ak je väčšie ako 0, zásuvka sa vypne iba vtedy, keď odber klesne z tejto
+        hodnoty (alebo vyššej) na hranicu či pod ňu – napríklad z 80 na 70 mA.
+        Nízky odber bez poklesu (hranie zo siete s plnou batériou) zásuvku
+        nevypne. Prvé 2 minúty po zapnutí sa ignorujú (nárazový prúd). Pri 0 sa
+        vypína podľa toho, ako dlho je odber pod hranicou.
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 3000
+          step: 0.01
+          mode: box
+    low_minutes:
+      name: Ako dlho musí byť odber pod hranicou
+      description: >-
+        Odfiltruje krátke poklesy (uspatie, stlmenie displeja), aby sa zásuvka
+        nevypla predčasne.
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 240
+          step: 1
+          unit_of_measurement: min
+          mode: box
+    timer_section:
+      name: Zapnutie časovačom
+      icon: mdi:timer-outline
+      input:
+        use_timer:
+          name: Zapnúť po uplynutí doby vypnutia
+          description: >-
+            Vypnite, ak má zásuvku zapínať len senzor batérie alebo vlastný
+            spúšťač.
+          default: true
+          selector:
+            boolean:
+        off_minutes:
+          name: Doba vypnutia
+          description: >-
+            Ako dlho zostane zásuvka vypnutá, kým sa znovu zapne. Musí byť
+            kratšia, než koľko zariadenie vydrží na batériu.
+          default: 240
+          selector:
+            number:
+              min: 1
+              max: 43200
+              step: 1
+              unit_of_measurement: min
+              mode: box
+    battery_section:
+      name: Zapnutie podľa senzora batérie (voliteľné)
+      icon: mdi:battery-charging-60
+      collapsed: true
+      input:
+        battery_sensor:
+          name: Senzor batérie
+          description: >-
+            Senzor s úrovňou batérie zariadenia v percentách. Nechajte prázdne,
+            ak ho nemáte.
+          default: ""
+          selector:
+            entity:
+              filter:
+                - domain: sensor
+        battery_on_below:
+          name: Zapnúť, keď batéria klesne pod
+          default: 30
+          selector:
+            number:
+              min: 1
+              max: 99
+              step: 1
+              unit_of_measurement: "%"
+        battery_off_above:
+          name: Vypnúť, keď batéria vystúpi nad
+          description: >-
+            Pri hodnote 100 sa podľa batérie nevypína a rozhoduje len pokles
+            odberu.
+          default: 100
+          selector:
+            number:
+              min: 2
+              max: 100
+              step: 1
+              unit_of_measurement: "%"
+    custom_section:
+      name: Vlastné spúšťače zapnutia (voliteľné)
+      icon: mdi:gesture-tap-button
+      collapsed: true
+      input:
+        on_triggers:
+          name: Spúšťače zapnutia
+          description: >-
+            Ľubovoľné spúšťače, ktoré zásuvku zapnú – napríklad konkrétny čas,
+            tlačidlo, stav iného senzora alebo pomocníka.
+          default: []
+          selector:
+            trigger:
+    on_after_restart:
+      name: Zapnúť zásuvku po reštarte Home Assistanta
+      description: >-
+        Reštart vynuluje odpočítavanie doby vypnutia. Ak je voľba zapnutá, vypnutá
+        zásuvka sa po štarte HA hneď zapne, aby zariadenie nezostalo bez napájania.
+      default: true
+      selector:
+        boolean:
+
+mode: queued
+max: 5
+max_exceeded: silent
+
+trigger_variables:
+  battery_sensor: !input battery_sensor
+  battery_on_below: !input battery_on_below
+  battery_off_above: !input battery_off_above
+
+triggers:
+  # Odber klesol pod hranicu a drží sa tam -> batéria je nabitá
+  - trigger: numeric_state
+    entity_id: !input load_sensor
+    below: !input threshold
+    for:
+      minutes: !input low_minutes
+    id: low
+  # Zásuvka je už nejaký čas zapnutá a odber nad hranicu vôbec nevystúpil
+  - trigger: state
+    entity_id: !input plug
+    to: "on"
+    for:
+      minutes: !input low_minutes
+    id: low
+  # Odber klesol z hodnoty „pokles z“ na hranicu (vyhodnotí sa v akciách)
+  - trigger: state
+    entity_id: !input load_sensor
+    id: drop
+  # Doba vypnutia uplynula
+  - trigger: state
+    entity_id: !input plug
+    to: "off"
+    for:
+      minutes: !input off_minutes
+    id: resume
+  # Poistka: kontrola každých 5 minút, ak bola zásuvka vypnutá už pred
+  # uložením/zapnutím automatizácie (vtedy predchádzajúci spúšťač nezareaguje)
+  - trigger: time_pattern
+    minutes: "/5"
+    id: resume_check
+  - trigger: homeassistant
+    event: start
+    id: ha_start
+  # Senzor batérie (ak je zadaný)
+  - trigger: template
+    value_template: >-
+      {{ battery_sensor is string and battery_sensor != ''
+         and states(battery_sensor) | float(101) < battery_on_below | float }}
+    id: battery_low
+  - trigger: template
+    value_template: >-
+      {{ battery_sensor is string and battery_sensor != ''
+         and states(battery_sensor) | float(-1) > battery_off_above | float }}
+    id: battery_high
+  # Vlastné spúšťače zapnutia
+  - triggers: !input on_triggers
+
+variables:
+  plug: !input plug
+  load_sensor: !input load_sensor
+  threshold: !input threshold
+  drop_from: !input drop_from
+  use_timer: !input use_timer
+  off_minutes: !input off_minutes
+  on_after_restart: !input on_after_restart
+  own_ids: ["low", "drop", "resume", "resume_check", "ha_start", "battery_low", "battery_high"]
+
+actions:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: low
+          - condition: state
+            entity_id: !input plug
+            state: "on"
+          - condition: template
+            value_template: >-
+              {{ drop_from | float(0) <= 0
+                 and states(load_sensor) | float(none) is not none
+                 and states(load_sensor) | float < threshold | float }}
+        sequence:
+          - action: switch.turn_off
+            target:
+              entity_id: !input plug
+      - conditions:
+          - condition: trigger
+            id: drop
+          - condition: template
+            value_template: >-
+              {% set f = trigger.from_state.state | float(none) if trigger.from_state else none %}
+              {% set t = trigger.to_state.state | float(none) if trigger.to_state else none %}
+              {{ drop_from | float(0) > 0
+                 and f is not none and t is not none
+                 and f >= drop_from | float and t <= threshold | float
+                 and is_state(plug, 'on')
+                 and (now() - states[plug].last_changed).total_seconds() >= 120 }}
+        sequence:
+          - action: switch.turn_off
+            target:
+              entity_id: !input plug
+      - conditions:
+          - condition: trigger
+            id: battery_high
+        sequence:
+          - action: switch.turn_off
+            target:
+              entity_id: !input plug
+      - conditions:
+          - condition: trigger
+            id: resume
+          - condition: template
+            value_template: "{{ use_timer }}"
+        sequence:
+          - action: switch.turn_on
+            target:
+              entity_id: !input plug
+      - conditions:
+          - condition: trigger
+            id: resume_check
+          - condition: template
+            value_template: >-
+              {{ use_timer and is_state(plug, 'off')
+                 and (now() - states[plug].last_changed).total_seconds()
+                     >= off_minutes | float * 60 }}
+        sequence:
+          - action: switch.turn_on
+            target:
+              entity_id: !input plug
+      - conditions:
+          - condition: trigger
+            id: ha_start
+          - condition: template
+            value_template: "{{ on_after_restart }}"
+          - condition: state
+            entity_id: !input plug
+            state: "off"
+        sequence:
+          - action: switch.turn_on
+            target:
+              entity_id: !input plug
+      # Senzor batérie alebo ktorýkoľvek vlastný spúšťač
+      - conditions:
+          - condition: template
+            value_template: >-
+              {{ trigger.id == 'battery_low' or trigger.id not in own_ids }}
+        sequence:
+          - action: switch.turn_on
+            target:
+              entity_id: !input plug

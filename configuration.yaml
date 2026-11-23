@@ -30,8 +30,10 @@ homeassistant:
     ev_autorecover: !include packages/ev_autorecover.yaml
     ev_manual: !include packages/ev_manual.yaml
     ev_manual_entry: !include packages/ev_manual_entry.yaml
+    ev_dc_session: !include packages/ev_dc_session.yaml
     ev_schedule: !include packages/ev_schedule.yaml
     solar_forecast: !include packages/solar_forecast.yaml
+    body_scale: !include packages/body_scale.yaml
     
 #rest:
 #  - resource: http://192.168.88.72/api/status
@@ -825,6 +827,8 @@ command_line:
         - all_count
         - all_kwh
         - all_cost
+        - dc_pending
+        - provider_prices
 
 # Vylúč veľký sessions atribút z recordera (zoznam → DB bloat)
 recorder:

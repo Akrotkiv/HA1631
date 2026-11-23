@@ -1614,3 +1614,113 @@
   - action: script.vetranie_nastav_stupen
     data:
       stupen: 4
+- id: vetranie_znizenie_outdoor_teplejsi
+  alias: Vetranie - Zníženie pri teplejšom vzduchu vonku
+  description: Ak je vetranie na stupni 8, zníži ho na 2 keď je outdoor teplota vyššia
+    ako v hosťovskej izbe
+  triggers:
+  - trigger: state
+    entity_id: sensor.teplomer_outdoor_temperature
+  - trigger: state
+    entity_id: sensor.wifi_smart_switch_temperature
+  - trigger: state
+    entity_id: input_number.vetranie_stupen
+    enabled: false
+  conditions:
+  - condition: state
+    entity_id: input_boolean.vetranie_forced_off
+    state: 'off'
+  - condition: template
+    value_template: '{{ states(''input_number.vetranie_stupen'') | int(0) >= 4 }}'
+  - condition: template
+    value_template: "{{ states('sensor.teplomer_outdoor_temperature') | float(-999)
+      >\n   states('sensor.wifi_smart_switch_temperature') | float(999) }}\n"
+  actions:
+  - action: script.vetranie_nastav_stupen
+    data:
+      stupen: 2
+  - action: logbook.log
+    data:
+      name: Vetranie
+      message: "\U0001F53D Vetranie znížené z 8 na 2 – outdoor teplota ({{ states('sensor.teplomer_outdoor_temperature')
+        }}°C) je vyššia ako hosťovská izba ({{ states('sensor.wifi_smart_switch_temperature')
+        }}°C)"
+  mode: single
+- id: vetranie_zvysenie_outdoor_chladnejsi
+  alias: Vetranie - Zvýšenie pri chladnejšom vzduchu vonku
+  description: Ak je vetranie na stupni 2 (znížené kvôli teplu vonku), vráti ho na
+    8 keď je outdoor teplota opäť nižšia ako v hosťovskej izbe
+  triggers:
+  - trigger: state
+    entity_id: sensor.teplomer_outdoor_temperature
+  - trigger: state
+    entity_id: sensor.wifi_smart_switch_temperature
+  - trigger: state
+    entity_id: input_number.vetranie_stupen
+    enabled: false
+  conditions:
+  - condition: state
+    entity_id: input_boolean.vetranie_forced_off
+    state: 'off'
+  - condition: template
+    value_template: '{{ states(''input_number.vetranie_stupen'') | int(0) == 2 }}'
+    enabled: false
+  - condition: template
+    value_template: "{{ states('sensor.teplomer_outdoor_temperature') | float(999)
+      <\n   states('sensor.wifi_smart_switch_temperature') | float(-999)-0.5 }}\n"
+  actions:
+  - action: script.vetranie_nastav_stupen
+    data:
+      stupen: 8
+  - action: logbook.log
+    data:
+      name: Vetranie
+      message: "\U0001F53C Vetranie zvýšené z 2 na 8 – outdoor teplota ({{ states('sensor.teplomer_outdoor_temperature')
+        }}°C) je opäť nižšia ako hosťovská izba ({{ states('sensor.wifi_smart_switch_temperature')
+        }}°C)"
+  mode: single
+- id: '1794588568492'
+  alias: SW Klima - zapnutie a vypnutie klímy
+  description: Vypínač IKEA E1743 (Z2M SW Klima) zapína a vypína klímu
+  triggers:
+  - trigger: mqtt
+    id: 'on'
+    options:
+      topic: zigbee2mqtt/SW Klima/action
+      payload: 'on'
+  - trigger: mqtt
+    topic: zigbee2mqtt/SW Klima/action
+    payload: 'off'
+    id: 'off'
+  conditions: []
+  actions:
+  - choose:
+    - conditions:
+      - condition: trigger
+        id: 'on'
+      sequence:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.klima_cojirbfaaai_power_switch
+    - conditions:
+      - condition: trigger
+        id: 'off'
+      sequence:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.klima_cojirbfaaai_power_switch
+  mode: single
+- id: ochrana_baterie_pw_seda
+  alias: Ochrana batérie – PW seda
+  description: 'HK Onyx Studio 3: zásuvka 28 min vypnutá, potom zapnutá, kým prúd
+    neklesne z 80 mA na 70 mA.'
+  use_blueprint:
+    path: custom/ochrana_baterie_zasuvka.yaml
+    input:
+      plug: switch.pw_seda
+      load_sensor: sensor.pw_seda_current
+      threshold: 70
+      drop_from: 80
+      low_minutes: 2
+      off_minutes: 28
+      on_after_restart: true

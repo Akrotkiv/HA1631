@@ -30,6 +30,8 @@ SK_MONTHS = ["", "Január", "Február", "Marec", "Apríl", "Máj", "Jún",
 NUM_FIELDS = {"energy_kwh", "charging_min", "cost_eur", "avg_price", "solar_kwh",
               "grid_kwh", "solar_pct", "t1_kwh", "t2_kwh", "t3_kwh", "t4_kwh",
               "soc_start", "soc_end", "odo_start", "odo_end"}
+# OVMS performance (prázdne = bez dát → None, nie 0)
+PERF_FIELDS = {"battery_kwh", "efficiency_pct", "power_avg_kw", "power_max_kw", "car_eff_pct", "bat_temp_start", "bat_temp_end", "soh"}
 
 
 def num(v):
@@ -65,6 +67,13 @@ def load_rows():
             for k in list(r.keys()):
                 if k in NUM_FIELDS:
                     r[k] = num(r[k])
+                elif k in PERF_FIELDS:
+                    r[k] = num(r[k]) if (r[k] or "").strip() else None
+            # AC/DC + poskytovateľ (staré riadky bez stĺpca → default Home/AC)
+            ct = (r.get("charge_type") or "").strip().upper()
+            r["charge_type"] = ct if ct in ("AC", "DC") else "AC"
+            r["provider"] = (r.get("provider") or "").strip() or "Home"
+            r["comment"] = (r.get("comment") or "").strip()
             start = r.get("start", "")
             r["date"] = start[5:10].replace("-", ".")   # MM.DD short
             r["time"] = start[11:16]
@@ -152,8 +161,37 @@ def main():
         for u, (e, c, s) in sorted(veh.items(), key=lambda kv: -kv[1][0])
     ]
 
+    # AC/DC breakdown (vybrané obdobie)
+    mode = {}
+    for r in sel:
+        mk = r.get("charge_type") or "AC"
+        b = mode.setdefault(mk, [0.0, 0.0, 0])
+        b[0] += float(r.get("energy_kwh", 0) or 0)
+        b[1] += float(r.get("cost_eur", 0) or 0)
+        b[2] += 1
+    by_mode = [
+        {"name": k, "energy": round(e, 1), "cost": round(c, 2), "count": n}
+        for k, (e, c, n) in sorted(mode.items())
+    ]
+
+    # by-provider breakdown (vybrané obdobie)
+    prov = {}
+    for r in sel:
+        p = (r.get("provider") or "Home").strip() or "Home"
+        b = prov.setdefault(p, [0.0, 0.0, 0.0])
+        b[0] += float(r.get("energy_kwh", 0) or 0)
+        b[1] += float(r.get("cost_eur", 0) or 0)
+        b[2] += float(r.get("solar_kwh", 0) or 0)
+    by_provider = [
+        {"name": p, "energy": round(e, 1), "cost": round(c, 2),
+         "solar_pct": round(s / e * 100) if e > 0 else 0}
+        for p, (e, c, s) in sorted(prov.items(), key=lambda kv: -kv[1][0])
+    ]
+
     # zoznam všetkých áut v dátach (pre dynamický filter tabuľky)
     vehicles = sorted({(r.get("user") or "").strip() for r in rows if (r.get("user") or "").strip()})
+    # zoznam všetkých poskytovateľov v dátach (pre dynamický výber)
+    providers = sorted({(r.get("provider") or "").strip() for r in rows if (r.get("provider") or "").strip()})
 
     # table: filter podľa auta, newest first, strip internal keys
     table_src = sel if vehicle in ("Všetky", "", None) else [r for r in sel if (r.get("user") or "") == vehicle]
@@ -162,8 +200,27 @@ def main():
         for k in ("_y", "_m", "_d"):
             r.pop(k, None)
 
+    # DC čakajúce na údaje od providera (auto_dc z OVMS) — celá história, najnovšie prvé
+    dc_pending = [
+        {"id": r["session_id"],
+         "label": f"{r['session_id']} | {r['start'][8:10]}.{r['start'][5:7]} {r['time']}"
+                  f" · {r['energy_kwh']} kWh · {r.get('soc_start') or '?'}→{r.get('soc_end') or '?'} %",
+         "kwh": r["energy_kwh"]}
+        for r in sorted(rows, key=lambda r: r.get("start", ""), reverse=True)
+        if r.get("stop_reason") == "auto_dc"
+    ][:15]
+    # posledná DC cena €/kWh u každého poskytovateľa (predvyplnenie ceny)
+    provider_prices = {}
+    for r in sorted(rows, key=lambda r: r.get("start", "")):
+        if r.get("charge_type") == "DC" and r.get("stop_reason") != "auto_dc":
+            p = (r.get("provider") or "").strip()
+            if p and p not in ("?", "Home"):
+                provider_prices[p] = r.get("avg_price") or 0
+
     out = {
         "count": len(sel),
+        "dc_pending": dc_pending,
+        "provider_prices": provider_prices,
         "label": label,
         "period": period,
         "offset": offset,
@@ -175,7 +232,10 @@ def main():
         "chart_mode": chart_mode,
         "chart": chart,
         "by_vehicle": by_vehicle,
+        "by_mode": by_mode,
+        "by_provider": by_provider,
         "vehicles": vehicles,
+        "providers": providers,
         "sessions": sel_sorted,
         "all_count": len(rows),
         "all_kwh": all_kwh,

@@ -1,0 +1,308 @@
+# ============================================
+# EV DC SESSION — automatický záznam rýchlonabíjania (CHAdeMO) z OVMS
+# packages/ev_dc_session.yaml
+#
+# OVMS pri DC nabíjaní hlási v.c.mode = "performance" (+ v.c.type = chademo).
+#   ŠTART: sensor.mysan_charge_mode → performance
+#   KONIEC: charge_mode odíde z performance, alebo charge_state → stopped/done
+# Po konci (90 s na finálne OVMS metriky) zapíše ev_ovms_perf.py dc riadok do
+# /config/ev_sessions.csv: energia = OVMS kWh do batérie, SOC, odometer,
+# výkon (Ø / max), teplota batérie, SOH. stop_reason = auto_dc, provider = "?".
+#
+# Cena a poskytovateľ nie sú známe → doplniť cez kartu "⚡ DC od providera"
+# (Pridať / Upraviť): vyber čakajúcu session, poskytovateľa, kWh a cenu z účtu.
+#   - €/kWh sa predvyplní podľa poslednej DC ceny u poskytovateľa
+#   - cena celkom = kWh × €/kWh (dá sa prepísať ručne)
+#   - kWh od providera → energy_kwh; OVMS kWh ostáva v battery_kwh → účinnosť DC
+#   - stop_reason auto_dc → dc_provider
+# Ak sa session zadá aj ručne (e-mail), ručný riadok auto_dc záznam nahradí
+# (ev_edit_session.py add) a naopak — ak ručný už existuje, auto sa nepridá.
+# ============================================
+
+input_boolean:
+  ev_dc_session_active:
+    name: "EV - DC session aktívna"
+    icon: mdi:ev-station
+
+input_select:
+  ev_dc_fill_session:
+    name: "EV DC - Čakajúca session"
+    options: ["— žiadna čakajúca DC session —"]
+    icon: mdi:ev-station
+  ev_dc_fill_provider:
+    name: "EV DC - Poskytovateľ"
+    options: ["ZSE", "GreenWay", "Lidl"]
+    icon: mdi:store-marker
+
+input_number:
+  ev_dc_fill_kwh:
+    name: "EV DC - kWh od providera"
+    min: 0
+    max: 500
+    step: 0.01
+    unit_of_measurement: "kWh"
+    mode: box
+    icon: mdi:lightning-bolt
+  ev_dc_fill_price:
+    name: "EV DC - Cena za kWh"
+    min: 0
+    max: 5
+    step: 0.001
+    unit_of_measurement: "EUR/kWh"
+    mode: box
+    icon: mdi:cash-multiple
+  ev_dc_fill_cost:
+    name: "EV DC - Cena celkom"
+    min: 0
+    max: 1000
+    step: 0.01
+    unit_of_measurement: "EUR"
+    mode: box
+    icon: mdi:cash
+
+input_text:
+  ev_dc_fill_comment:
+    name: "EV DC - Poznámka"
+    max: 255
+    icon: mdi:comment-text-outline
+
+input_datetime:
+  ev_dc_session_start:
+    name: "EV - DC session začiatok"
+    has_date: true
+    has_time: true
+
+shell_command:
+  ev_dc_session_log: 'python3 /config/scripts/ev_ovms_perf.py dc "{{ start }}" "{{ end }}"'
+  ev_dc_fill_provider: 'python3 /config/scripts/ev_ovms_perf.py provider "{{ sid }}" "{{ prov }}" "{{ kwh }}" "{{ cost }}" "{{ note }}"'
+
+script:
+  ev_dc_fill_save:
+    alias: "EV DC - Uložiť údaje od providera"
+    icon: mdi:content-save-check
+    sequence:
+      - variables:
+          sid: "{{ states('input_select.ev_dc_fill_session').split(' | ')[0] }}"
+          prov: "{{ states('input_select.ev_dc_fill_provider') }}"
+          kwh: "{{ states('input_number.ev_dc_fill_kwh') | float(0) | round(3) }}"
+          cost: "{{ states('input_number.ev_dc_fill_cost') | float(0) | round(2) }}"
+          note: >-
+            {{ states('input_text.ev_dc_fill_comment') | regex_replace('[\r\n\t"\\\\]', ' ') | trim
+               if states('input_text.ev_dc_fill_comment') not in ['unknown','unavailable'] else '' }}
+      - if:
+          - condition: template
+            value_template: "{{ sid[:2] == '20' and kwh | float(0) > 0 }}"
+        then:
+          - service: shell_command.ev_dc_fill_provider
+            data: { sid: "{{ sid }}", prov: "{{ prov }}", kwh: "{{ kwh }}", cost: "{{ cost }}", note: "{{ note }}" }
+            response_variable: res
+          - service: input_text.set_value
+            target: { entity_id: input_text.ev_dc_fill_comment }
+            data: { value: "" }
+          - delay: { milliseconds: 500 }
+          - service: homeassistant.update_entity
+            target: { entity_id: sensor.ev_sessions_table }
+          - service: persistent_notification.create
+            data:
+              title: "⚡ DC session doplnená"
+              message: "{{ res.stdout if res is defined else '' }}"
+              notification_id: ev_dc_fill
+        else:
+          - service: persistent_notification.create
+            data:
+              title: "⚡ DC session — chýbajú údaje"
+              message: "Vyber čakajúcu DC session a zadaj kWh od providera (> 0)."
+              notification_id: ev_dc_fill
+
+automation:
+  - id: ev_dc_session_start
+    alias: "EV DC Session - Štart (OVMS performance)"
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: sensor.mysan_charge_mode
+        to: "performance"
+    condition:
+      - condition: state
+        entity_id: input_boolean.ev_dc_session_active
+        state: "off"
+    action:
+      - service: input_datetime.set_datetime
+        target: { entity_id: input_datetime.ev_dc_session_start }
+        data: { datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}" }
+      - service: input_boolean.turn_on
+        target: { entity_id: input_boolean.ev_dc_session_active }
+      - service: logbook.log
+        data:
+          name: "EV DC Session"
+          message: >
+            ▶ DC štart — {{ states('sensor.mysan_charge_type') }},
+            SOC {{ states('sensor.mysan_battery_level') }}%,
+            {{ states('sensor.mysan_charge_power') }} kW
+
+  - id: ev_dc_session_stop
+    alias: "EV DC Session - Koniec"
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: sensor.mysan_charge_mode
+        from: "performance"
+        not_to: ["unknown", "unavailable"]
+      - platform: state
+        entity_id: sensor.mysan_charge_state
+        to: ["stopped", "done"]
+    condition:
+      - condition: state
+        entity_id: input_boolean.ev_dc_session_active
+        state: "on"
+    action:
+      - variables:
+          start: "{{ states('input_datetime.ev_dc_session_start') }}"
+          end: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+      - service: input_boolean.turn_off
+        target: { entity_id: input_boolean.ev_dc_session_active }
+      # OVMS posiela finálne kWh/SOC s oneskorením → počkaj, nech ich recorder má
+      - delay: { seconds: 90 }
+      - service: shell_command.ev_dc_session_log
+        data:
+          start: "{{ start }}"
+          end: "{{ end }}"
+        response_variable: res
+      - delay: { seconds: 2 }
+      - service: homeassistant.update_entity
+        target: { entity_id: sensor.ev_sessions_table }
+      - service: persistent_notification.create
+        data:
+          title: "⚡ DC nabíjanie zaznamenané"
+          message: >
+            {{ start[11:16] }}–{{ end[11:16] }} · {{ (res.stdout if res is defined else '') }}.
+            Doplň kWh a cenu od providera: Pridať / Upraviť → ⚡ DC od providera.
+          notification_id: ev_dc_session_done
+      - service: logbook.log
+        data:
+          name: "EV DC Session"
+          message: "■ DC koniec — {{ res.stdout if res is defined else '?' }}"
+
+  # ===== DC od providera: zoznam čakajúcich session + poskytovateľov =====
+  - id: ev_dc_fill_sync
+    alias: "EV DC - Sync čakajúcich session"
+    mode: queued
+    trigger:
+      - platform: state
+        entity_id: sensor.ev_sessions_table
+      - platform: homeassistant
+        event: start
+    action:
+      - variables:
+          pend: "{{ state_attr('sensor.ev_sessions_table','dc_pending') or [] }}"
+          opts: >
+            {% set l = pend | map(attribute='label') | list %}
+            {{ l if l else ['— žiadna čakajúca DC session —'] }}
+          provs: >
+            {% set a = (state_attr('input_select.ev_madd_provider','options') or [])
+                     + (state_attr('sensor.ev_sessions_table','providers') or []) %}
+            {{ a | reject('in', ['Home', '?', '']) | unique | list }}
+      - if:
+          - condition: template
+            value_template: "{{ opts != (state_attr('input_select.ev_dc_fill_session','options') or []) }}"
+        then:
+          - service: input_select.set_options
+            target: { entity_id: input_select.ev_dc_fill_session }
+            data: { options: "{{ opts }}" }
+      - if:
+          - condition: template
+            value_template: "{{ provs | length > 0 and provs != (state_attr('input_select.ev_dc_fill_provider','options') or []) }}"
+        then:
+          - service: input_select.set_options
+            target: { entity_id: input_select.ev_dc_fill_provider }
+            data: { options: "{{ provs }}" }
+
+  # Výber session → kWh predvyplň OVMS hodnotou (prepíš podľa účtu providera)
+  - id: ev_dc_fill_load
+    alias: "EV DC - Načítať vybranú session"
+    mode: restart
+    trigger:
+      - platform: state
+        entity_id: input_select.ev_dc_fill_session
+      # po štarte HA (výber sa obnoví bez zmeny → bez tohto by sa polia nenačítali)
+      - platform: homeassistant
+        event: start
+    action:
+      - if:
+          - condition: template
+            value_template: "{{ trigger.platform == 'homeassistant' }}"
+        then:
+          - delay: { seconds: 40 }
+      - variables:
+          sid: "{{ states('input_select.ev_dc_fill_session').split(' | ')[0] }}"
+          s0: >
+            {{ (state_attr('sensor.ev_sessions_table','dc_pending') or [])
+               | selectattr('id', 'equalto', sid) | list | first | default({}) }}
+      - condition: template
+        value_template: "{{ s0.kwh is defined }}"
+      - service: input_number.set_value
+        target: { entity_id: input_number.ev_dc_fill_kwh }
+        data: { value: "{{ s0.kwh | float(0) | round(2) }}" }
+      # €/kWh pre aktuálne zvoleného poskytovateľa (ak ho poznáme)
+      - variables:
+          price: "{{ (state_attr('sensor.ev_sessions_table','provider_prices') or {}).get(states('input_select.ev_dc_fill_provider')) }}"
+      - if:
+          - condition: template
+            value_template: "{{ price is number }}"
+        then:
+          - service: input_number.set_value
+            target: { entity_id: input_number.ev_dc_fill_price }
+            data: { value: "{{ price }}" }
+
+  # Poskytovateľ → €/kWh z poslednej DC session u neho
+  - id: ev_dc_fill_provider_price
+    alias: "EV DC - Cena podľa poskytovateľa"
+    mode: restart
+    trigger:
+      - platform: state
+        entity_id: input_select.ev_dc_fill_provider
+    variables:
+      price: "{{ (state_attr('sensor.ev_sessions_table','provider_prices') or {}).get(trigger.to_state.state) }}"
+    condition:
+      - condition: template
+        value_template: "{{ price is number }}"
+    action:
+      - service: input_number.set_value
+        target: { entity_id: input_number.ev_dc_fill_price }
+        data: { value: "{{ price }}" }
+
+  # kWh alebo €/kWh zmenené → cena celkom = kWh × €/kWh
+  - id: ev_dc_fill_cost_calc
+    alias: "EV DC - Prepočet ceny"
+    mode: restart
+    trigger:
+      - platform: state
+        entity_id: [input_number.ev_dc_fill_kwh, input_number.ev_dc_fill_price]
+    action:
+      - service: input_number.set_value
+        target: { entity_id: input_number.ev_dc_fill_cost }
+        data:
+          value: "{{ (states('input_number.ev_dc_fill_kwh') | float(0) * states('input_number.ev_dc_fill_price') | float(0)) | round(2) }}"
+
+  # Ručné pridanie (formulár Pridať): DC + známy poskytovateľ → predvyplň cenu celkom
+  - id: ev_madd_dc_price_prefill
+    alias: "EV Manuál - DC cena podľa poskytovateľa"
+    mode: restart
+    trigger:
+      - platform: state
+        entity_id:
+          - input_select.ev_madd_provider
+          - input_select.ev_madd_charge_type
+          - input_number.ev_madd_energy
+    variables:
+      price: "{{ (state_attr('sensor.ev_sessions_table','provider_prices') or {}).get(states('input_select.ev_madd_provider')) }}"
+    condition:
+      - condition: state
+        entity_id: input_select.ev_madd_charge_type
+        state: "DC"
+      - condition: template
+        value_template: "{{ price is number and states('input_number.ev_madd_energy') | float(0) > 0 }}"
+    action:
+      - service: input_number.set_value
+        target: { entity_id: input_number.ev_madd_cost }
+        data: { value: "{{ (states('input_number.ev_madd_energy') | float(0) * price) | round(2) }}" }

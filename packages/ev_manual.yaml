@@ -21,6 +21,19 @@ input_boolean:
     name: "EV - Manuálny režim (vypni automatiku)"
     icon: mdi:hand-back-right
 
+# Posuvník prúdu pre ručné ovládanie: 6–32 A (number.hacharger_maximum_current z OCPP má rozsah 0–32).
+# Dashboard ukazuje tento helper; zmena posuvníkom sa prenesie na nabíjačku (len ak ju zmenil človek).
+input_number:
+  ev_manual_current:
+    name: "EV - Ručný prúd (A)"
+    min: 6
+    max: 32
+    step: 1
+    initial: 16
+    unit_of_measurement: "A"
+    mode: slider
+    icon: mdi:current-ac
+
 automation:
   - id: ev_manual_mode_apply
     alias: "EV - Manuálny režim (prepínač automatiky)"
@@ -85,3 +98,49 @@ automation:
             data:
               name: "EV Manuál"
               message: "✅ Manuálny režim VYP — automatika zapnutá."
+
+  # ---- posuvník (6–32 A) -> nabíjačka; len zásah používateľa v manuálnom režime ----
+  - id: ev_manual_current_apply
+    alias: "EV - Manuál: posuvník prúdu -> nabíjačka"
+    mode: restart
+    trigger:
+      - platform: state
+        entity_id: input_number.ev_manual_current
+    condition:
+      - condition: state
+        entity_id: input_boolean.ev_manual_mode
+        state: "on"
+      - condition: template
+        value_template: "{{ trigger.to_state.context.user_id is not none }}"
+      - condition: template
+        value_template: >
+          {{ states('number.hacharger_maximum_current') | int(-1)
+             != states('input_number.ev_manual_current') | int(0) }}
+    action:
+      - service: number.set_value
+        target: { entity_id: number.hacharger_maximum_current }
+        data: { value: "{{ states('input_number.ev_manual_current') | int(16) }}" }
+
+  # ---- nabíjačka -> posuvník (zrkadlenie reálneho prúdu, orezané na 6–32 A) ----
+  - id: ev_manual_current_mirror
+    alias: "EV - Manuál: reálny prúd -> posuvník"
+    mode: restart
+    trigger:
+      - platform: state
+        entity_id: number.hacharger_maximum_current
+      - platform: homeassistant
+        event: start
+      - platform: state
+        entity_id: input_boolean.ev_manual_mode
+        to: "on"
+    condition:
+      - condition: template
+        value_template: >
+          {{ states('number.hacharger_maximum_current') | int(-1) >= 0
+             and [[states('number.hacharger_maximum_current') | int(0), 6] | max, 32] | min
+                 != states('input_number.ev_manual_current') | int(0) }}
+    action:
+      - delay: { seconds: 2 }
+      - service: input_number.set_value
+        target: { entity_id: input_number.ev_manual_current }
+        data: { value: "{{ [[states('number.hacharger_maximum_current') | int(16), 6] | max, 32] | min }}" }

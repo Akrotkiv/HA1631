@@ -1,0 +1,36 @@
+# Konečná (ustálená) váha z Mi Body Composition Scale 174E.
+# Senzor *_non_stabilized posiela priebežné hodnoty počas váženia.
+# Tento senzor ich zbiera do bufferu a keď hodnota klesne pod 5 kg
+# (zostúpenie z váhy), uloží medián hodnôt v rozsahu 95–100 % maxima.
+template:
+  - trigger:
+      - trigger: state
+        entity_id: sensor.mi_body_composition_scale_174e_weight_non_stabilized
+        not_to: [unknown, unavailable]
+    sensor:
+      - name: "Váha – meranie"
+        unique_id: mi_scale_174e_weight_final
+        unit_of_measurement: kg
+        device_class: weight
+        state_class: measurement
+        icon: mdi:scale-bathroom
+        state: >
+          {% set v = trigger.to_state.state | float(-1) %}
+          {% set buf = (this.attributes.buffer | default([])) if this is defined else [] %}
+          {% set last = this.attributes.last_ts | default(0) | float(0) if this is defined else 0 %}
+          {% set buf = [] if (as_timestamp(now()) - last) > 60 else buf %}
+          {% set mx = buf | max if buf | count > 0 else 0 %}
+          {% if v >= 0 and v < 5 and buf | count >= 2 and mx >= 20 %}
+            {% set top = buf | select('>=', mx * 0.95) | sort %}
+            {{ top[(top | count) // 2] | round(1) }}
+          {% else %}
+            {{ this.state if this is defined and this.state not in ['unknown', 'unavailable', None] else none }}
+          {% endif %}
+        attributes:
+          buffer: >
+            {% set v = trigger.to_state.state | float(-1) %}
+            {% set buf = (this.attributes.buffer | default([])) if this is defined else [] %}
+            {% set last = this.attributes.last_ts | default(0) | float(0) if this is defined else 0 %}
+            {% set buf = [] if (as_timestamp(now()) - last) > 60 else buf %}
+            {% if v < 5 %}{{ [] }}{% else %}{{ (buf + [v])[-60:] }}{% endif %}
+          last_ts: "{{ as_timestamp(now()) }}"

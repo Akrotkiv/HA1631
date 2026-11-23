@@ -5,6 +5,34 @@ Najnovšie hore. (Manuál systému: [EV_ENERGIA.md](EV_ENERGIA.md))
 
 ---
 
+## 2026-07-29
+
+### Manuálne session + editácia + AC/DC + poskytovateľ
+- **Nový balík `packages/ev_manual_entry.yaml`** + skript `scripts/ev_edit_session.py`
+  (CSV-safe add/replace/delete cez `csv` modul; riadok sa posiela ako jeden argument
+  poskladaný v Jinja `join(',')`, nie 20+ samostatných argumentov). Nový dashboard
+  pohľad **„Pridať / Upraviť"**.
+- **Pridať externú session** (nabíjanie mimo wallboxu): dva textové boxy na vlepenie
+  e-mailu zo **štartu** a **konca** → tlačidlo „Načítať z e-mailu" vytiahne cez Jinja
+  regex `Charged` (kWh), `SOC`, `ODO`. Ručne: dátum (picker), čas Štart/Koniec, cena
+  (€ celkom → dopočíta €/kWh a minúty), auto. Prechod cez polnoc ošetrený.
+  Externá session: `solar=0`, `grid=celá energia`, `stop_reason=manual_ext`.
+- **Editácia / mazanie**: picker sa plní zo `sensor.ev_sessions_table` (aktuálne obdobie),
+  po výbere sa polia načítajú. Uloženie = `replace` (zmaže starý riadok podľa ID + pridá
+  upravený, ID ostáva; solar/sieť/tarify T1–T4 sa zachovajú). Mazanie s potvrdením.
+- **AC/DC** (`charge_type`): nový stĺpec CSV. Wallbox = vždy **AC**. Pri manuáli výber
+  AC/DC; pri parse e-mailu „**Performance**" → **DC**, inak AC.
+- **Poskytovateľ** (`provider`): nový stĺpec CSV. Combobox s prednaplneným zoznamom
+  (Lidl / ZSE / GreenWay / SMINN / Majo / Home) + možnosť pridať nového (input_text +
+  tlačidlo → doplní do oboch výberov). Wallbox = **Home**. Zoznam sa dynamicky dopĺňa
+  o poskytovateľov z dát.
+- **Schéma CSV rozšírená 20 → 22 stĺpcov** (`+charge_type,+provider`). Migrácia:
+  existujúcim záznamom `charge_type=AC`, `provider=Home`. Dotknuté: `ev_sessions.csv`,
+  `ev_log_session.sh`, `ev_session.yaml` (stop), `ev_edit_session.py`,
+  `ev_sessions_json.py`, `ev_export_xlsx.py`.
+- **Štatistiky**: tabuľka Sessions má stĺpce **AC/DC** a **Kde** (poskytovateľ); pribudol
+  prehľad **AC vs DC** (kWh/€) a **donut podľa poskytovateľa** (sleduje metriku Solar/Cena).
+
 ## 2026-06-12
 
 ### Auto-recovery — oprava falošného poplachu pri taper

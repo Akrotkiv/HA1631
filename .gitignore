@@ -28,3 +28,13 @@ zigbee2mqtt/
 *.log.*
 *.log.*
 .ssh/
+
+# Lokálne zálohy súborov (core.config_entries.bak obsahuje prihlasovacie údaje)
+*.bak
+*.bak[0-9_-]*
+*.bak_*
+*.bak-*
+*.bak2_*
+*.bak3_*
+*.bak4_*
+lovelace_overview.bak_*

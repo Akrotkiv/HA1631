@@ -98,7 +98,14 @@
       "Bash(ha --version)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://supervisor/core/info)",
       "Bash(ha --help)",
-      "Bash(bash /homeassistant/scripts/export_dashboard.sh)"
+      "Bash(bash /homeassistant/scripts/export_dashboard.sh)",
+      "Bash(cp /homeassistant/ev_sessions.csv test.csv)",
+      "Read(//usr/bin/**)",
+      "Bash(python3 -c \"import homeassistant; print\\('homeassistant', homeassistant.__version__\\)\")",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(python3 -m py_compile custom_components/ocpp/chargepoint.py)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }

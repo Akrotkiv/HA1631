@@ -1,0 +1,850 @@
+# ============================================
+# EV MANUÁLNE SESSION — pridávanie externých nabíjaní + editácia záznamov
+# packages/ev_manual_entry.yaml
+#
+# 1) PRIDAŤ externú session (nabíjanie mimo wallboxu):
+#    - dva textové boxy: e-mail zo ŠTARTU a e-mail z KONCA nabíjania
+#      → tlačidlo "Načítať z e-mailu" vytiahne kWh, SOC, odometer (Jinja regex)
+#      → odometer sa ukladá len raz (stĺpec odo_end; odo_start ostáva prázdny)
+#      → voliteľná poznámka (stĺpec comment); nové auto sa dá pridať tlačidlom
+#    - manuálne: dátum (picker), čas Štart / Koniec, Cena (€ celkom), auto
+#    - alternatíva: všetko sa dá zadať aj ručne bez vkladania e-mailu
+#    Uloží sa cez ev_edit_session.py add → riadok do /config/ev_sessions.csv
+#    (solar=0, grid=celá energia, stop_reason=manual_ext).
+#
+# 2) UPRAVIŤ / ZMAZAŤ existujúcu session:
+#    - picker (input_select.ev_edit_session) sa plní zo sensor.ev_sessions_table
+#      (aktuálne zobrazené obdobie) → po výbere sa polia načítajú
+#    - dá sa zmeniť auto, dátum/čas, kWh, cena, SOC, odometer, dôvod konca
+#    - Uložiť = replace (zmaže starý riadok podľa ID + pridá upravený, ID ostáva)
+#    - solar/grid/tarify (T1-T4) sa pri edite zachovajú z pôvodného záznamu
+#
+# Pozn.: schéma CSV má 23 stĺpcov (posledný = comment, poznámka k session).
+#        Dojazd/CAC/SOH z e-mailu sa parsuje, ale neukladá (nemá stĺpec).
+# ============================================
+
+# --------------------------------------------------
+# HELPERY
+# --------------------------------------------------
+input_text:
+  # --- PRIDAŤ: vlepené e-maily (parse) ---
+  ev_madd_email_start:
+    name: "EV Manuál - E-mail ŠTART"
+    max: 255
+    mode: text
+    icon: mdi:email-arrow-right
+  ev_madd_email_end:
+    name: "EV Manuál - E-mail KONIEC"
+    max: 255
+    mode: text
+    icon: mdi:email-arrow-left
+  # --- UPRAVIŤ: skryté ID vybranej session + dôvod konca ---
+  ev_edit_id:
+    name: "EV Edit - ID (skryté)"
+    max: 30
+    icon: mdi:identifier
+  ev_edit_stop_reason:
+    name: "EV Edit - Dôvod konca"
+    max: 30
+    icon: mdi:flag-checkered
+  # --- Poznámka k session (ukladá sa do CSV, stĺpec comment) ---
+  ev_madd_comment:
+    name: "EV Manuál - Poznámka"
+    max: 255
+    mode: text
+    icon: mdi:comment-text-outline
+  ev_edit_comment:
+    name: "EV Edit - Poznámka"
+    max: 255
+    mode: text
+    icon: mdi:comment-text-outline
+  # --- Nové auto: názov + perzistentný zoznam pridaných áut (prežije reštart HA) ---
+  ev_vehicle_new:
+    name: "EV - Nové auto"
+    max: 30
+    mode: text
+    icon: mdi:car-plus
+  ev_vehicles_extra:
+    name: "EV - Pridané autá (zoznam, čiarkou)"
+    max: 255
+    mode: text
+    icon: mdi:car-multiple
+  # --- Pridanie nového poskytovateľa do zoznamu ---
+  ev_provider_new:
+    name: "EV - Nový poskytovateľ"
+    max: 40
+    mode: text
+    icon: mdi:store-plus
+
+input_datetime:
+  # --- PRIDAŤ ---
+  ev_madd_date:
+    name: "EV Manuál - Dátum"
+    has_date: true
+    has_time: false
+  ev_madd_start:
+    name: "EV Manuál - Čas ŠTART"
+    has_date: false
+    has_time: true
+    initial: "18:00:00"
+  ev_madd_end:
+    name: "EV Manuál - Čas KONIEC"
+    has_date: false
+    has_time: true
+    initial: "19:00:00"
+  # --- UPRAVIŤ ---
+  ev_edit_date:
+    name: "EV Edit - Dátum"
+    has_date: true
+    has_time: false
+  ev_edit_start:
+    name: "EV Edit - Čas ŠTART"
+    has_date: false
+    has_time: true
+  ev_edit_end:
+    name: "EV Edit - Čas KONIEC"
+    has_date: false
+    has_time: true
+
+input_number:
+  # --- PRIDAŤ ---
+  ev_madd_energy:
+    name: "EV Manuál - Energia (kWh)"
+    min: 0
+    max: 1000
+    step: 0.001
+    initial: 0
+    unit_of_measurement: "kWh"
+    mode: box
+    icon: mdi:lightning-bolt
+  ev_madd_cost:
+    name: "EV Manuál - Cena celkom (€)"
+    min: 0
+    max: 10000
+    step: 0.01
+    initial: 0
+    unit_of_measurement: "EUR"
+    mode: box
+    icon: mdi:cash
+  ev_madd_soc_start:
+    name: "EV Manuál - SOC štart (%)"
+    min: 0
+    max: 100
+    step: 1
+    initial: 0
+    unit_of_measurement: "%"
+    mode: box
+  ev_madd_soc_end:
+    name: "EV Manuál - SOC koniec (%)"
+    min: 0
+    max: 100
+    step: 1
+    initial: 0
+    unit_of_measurement: "%"
+    mode: box
+  ev_madd_odo_end:
+    name: "EV Manuál - Odometer (km)"
+    min: 0
+    max: 9999999
+    step: 1
+    initial: 0
+    unit_of_measurement: "km"
+    mode: box
+  # --- UPRAVIŤ (viditeľné) ---
+  ev_edit_energy:
+    name: "EV Edit - Energia (kWh)"
+    min: 0
+    max: 1000
+    step: 0.001
+    initial: 0
+    unit_of_measurement: "kWh"
+    mode: box
+  ev_edit_cost:
+    name: "EV Edit - Cena (€)"
+    min: 0
+    max: 10000
+    step: 0.01
+    initial: 0
+    unit_of_measurement: "EUR"
+    mode: box
+  ev_edit_soc_start:
+    name: "EV Edit - SOC štart (%)"
+    min: 0
+    max: 100
+    step: 1
+    initial: 0
+    unit_of_measurement: "%"
+    mode: box
+  ev_edit_soc_end:
+    name: "EV Edit - SOC koniec (%)"
+    min: 0
+    max: 100
+    step: 1
+    initial: 0
+    unit_of_measurement: "%"
+    mode: box
+  ev_edit_odo_end:
+    name: "EV Edit - Odometer (km)"
+    min: 0
+    max: 9999999
+    step: 1
+    initial: 0
+    unit_of_measurement: "km"
+    mode: box
+  # --- UPRAVIŤ (skryté — zachované z pôvodného záznamu) ---
+  ev_edit_solar_kwh:
+    name: "EV Edit - Solar kWh (skryté)"
+    min: 0
+    max: 1000
+    step: 0.001
+    initial: 0
+    mode: box
+  ev_edit_grid_kwh:
+    name: "EV Edit - Grid kWh (skryté)"
+    min: 0
+    max: 1000
+    step: 0.001
+    initial: 0
+    mode: box
+  ev_edit_t1_kwh:
+    name: "EV Edit - T1 (skryté)"
+    min: 0
+    max: 1000
+    step: 0.001
+    initial: 0
+    mode: box
+  ev_edit_t2_kwh:
+    name: "EV Edit - T2 (skryté)"
+    min: 0
+    max: 1000
+    step: 0.001
+    initial: 0
+    mode: box
+  ev_edit_t3_kwh:
+    name: "EV Edit - T3 (skryté)"
+    min: 0
+    max: 1000
+    step: 0.001
+    initial: 0
+    mode: box
+  ev_edit_t4_kwh:
+    name: "EV Edit - T4 (skryté)"
+    min: 0
+    max: 1000
+    step: 0.001
+    initial: 0
+    mode: box
+
+input_select:
+  ev_madd_vehicle:
+    name: "EV Manuál - Auto"
+    options: ["mysan", "vojtesla", "Petschka", "Hosť"]
+    initial: "mysan"
+    icon: mdi:car
+  ev_edit_vehicle:
+    name: "EV Edit - Auto"
+    options: ["mysan", "vojtesla", "Petschka", "Hosť"]
+    initial: "mysan"
+    icon: mdi:car
+  # --- AC/DC ---
+  ev_madd_charge_type:
+    name: "EV Manuál - AC/DC"
+    options: ["AC", "DC"]
+    initial: "AC"
+    icon: mdi:ev-plug-type2
+  ev_edit_charge_type:
+    name: "EV Edit - AC/DC"
+    options: ["AC", "DC"]
+    initial: "AC"
+    icon: mdi:ev-plug-type2
+  # --- Poskytovateľ (zoznam sa dopĺňa dynamicky) ---
+  ev_madd_provider:
+    name: "EV Manuál - Poskytovateľ"
+    options: ["Lidl", "ZSE", "GreenWay", "SMINN", "Majo", "Home"]
+    initial: "Home"
+    icon: mdi:store-marker
+  ev_edit_provider:
+    name: "EV Edit - Poskytovateľ"
+    options: ["Lidl", "ZSE", "GreenWay", "SMINN", "Majo", "Home"]
+    initial: "Home"
+    icon: mdi:store-marker
+  ev_edit_session:
+    name: "EV Edit - Vyber session"
+    options: ["— vyber session —"]
+    initial: "— vyber session —"
+    icon: mdi:playlist-edit
+
+# --------------------------------------------------
+# SHELL COMMANDS (CSV zápis cez Python)
+# --------------------------------------------------
+shell_command:
+  ev_manual_add: 'python3 /config/scripts/ev_edit_session.py add "{{ row }}"'
+  ev_replace_session: 'python3 /config/scripts/ev_edit_session.py replace "{{ old_id }}" "{{ row }}"'
+  ev_delete_session: 'python3 /config/scripts/ev_edit_session.py delete "{{ session_id }}"'
+
+# --------------------------------------------------
+# SKRIPTY
+# --------------------------------------------------
+script:
+  # ===== PRIDAŤ: dátum = dnes =====
+  ev_manual_today:
+    alias: "EV Manuál - Dátum na dnes"
+    icon: mdi:calendar-today
+    sequence:
+      - service: input_datetime.set_datetime
+        target: { entity_id: input_datetime.ev_madd_date }
+        data: { date: "{{ now().strftime('%Y-%m-%d') }}" }
+
+  # ===== Pridať nového poskytovateľa do zoznamu =====
+  ev_provider_add:
+    alias: "EV - Pridať poskytovateľa"
+    icon: mdi:store-plus
+    sequence:
+      - variables:
+          p: "{{ states('input_text.ev_provider_new') | trim }}"
+      - if:
+          - condition: template
+            value_template: >
+              {{ p not in ['', 'unknown', 'unavailable']
+                 and p not in (state_attr('input_select.ev_madd_provider','options') or []) }}
+        then:
+          - variables:
+              newopts: "{{ (state_attr('input_select.ev_madd_provider','options') or []) + [p] }}"
+          - service: input_select.set_options
+            target: { entity_id: input_select.ev_madd_provider }
+            data: { options: "{{ newopts }}" }
+          - service: input_select.set_options
+            target: { entity_id: input_select.ev_edit_provider }
+            data: { options: "{{ newopts }}" }
+          - service: input_select.select_option
+            target: { entity_id: input_select.ev_madd_provider }
+            data: { option: "{{ p }}" }
+          - service: input_text.set_value
+            target: { entity_id: input_text.ev_provider_new }
+            data: { value: "" }
+          - service: persistent_notification.create
+            data:
+              title: "➕ Poskytovateľ pridaný"
+              message: "Pridaný {{ p }} do zoznamu poskytovateľov."
+              notification_id: ev_provider_add
+        else:
+          - service: persistent_notification.create
+            data:
+              title: "ℹ️ Poskytovateľ"
+              message: "Zadaj názov, ktorý ešte nie je v zozname."
+              notification_id: ev_provider_add
+
+  # ===== Pridať nové auto do zoznamov (ovládanie / pridanie / editácia) =====
+  # Použitie: script.ev_vehicle_add  s voliteľným poľom  select: control | madd | edit
+  #   (ktorý výber sa po pridaní prepne na nové auto; default = madd)
+  ev_vehicle_add:
+    alias: "EV - Pridať auto"
+    icon: mdi:car-plus
+    fields:
+      select:
+        description: "Čo prepnúť na nové auto: control / madd / edit"
+        example: "madd"
+    sequence:
+      - variables:
+          v: >-
+            {{ states('input_text.ev_vehicle_new') | regex_replace('[,"\\\\\r\n\t]', ' ') | trim }}
+          cur: "{{ state_attr('input_select.ev_vehicle','options') or [] }}"
+          which: "{{ select | default('madd') }}"
+      - if:
+          - condition: template
+            value_template: "{{ v not in ['', 'unknown', 'unavailable'] and v not in cur }}"
+        then:
+          - variables:
+              newopts: "{{ cur + [v] }}"
+              extra: >-
+                {% set e = states('input_text.ev_vehicles_extra') %}
+                {% set l = (e.split(',') if e not in ['', 'unknown', 'unavailable'] else []) | map('trim') | select | list %}
+                {{- (l + [v]) | join(',') -}}
+          - service: input_text.set_value
+            target: { entity_id: input_text.ev_vehicles_extra }
+            data: { value: "{{ extra }}" }
+          - service: input_select.set_options
+            target: { entity_id: input_select.ev_vehicle }
+            data: { options: "{{ newopts }}" }
+          - service: input_select.set_options
+            target: { entity_id: input_select.ev_madd_vehicle }
+            data: { options: "{{ newopts }}" }
+          - service: input_select.set_options
+            target: { entity_id: input_select.ev_edit_vehicle }
+            data: { options: "{{ newopts }}" }
+          - choose:
+              - conditions: "{{ which == 'control' }}"
+                sequence:
+                  - service: input_select.select_option
+                    target: { entity_id: input_select.ev_vehicle }
+                    data: { option: "{{ v }}" }
+              - conditions: "{{ which == 'edit' }}"
+                sequence:
+                  - service: input_select.select_option
+                    target: { entity_id: input_select.ev_edit_vehicle }
+                    data: { option: "{{ v }}" }
+            default:
+              - service: input_select.select_option
+                target: { entity_id: input_select.ev_madd_vehicle }
+                data: { option: "{{ v }}" }
+          - service: input_text.set_value
+            target: { entity_id: input_text.ev_vehicle_new }
+            data: { value: "" }
+          - service: persistent_notification.create
+            data:
+              title: "➕ Auto pridané"
+              message: "Pridané auto „{{ v }}“ do zoznamov (ovládanie, pridanie aj úprava session)."
+              notification_id: ev_vehicle_add
+        else:
+          - service: persistent_notification.create
+            data:
+              title: "ℹ️ Auto"
+              message: "Zadaj názov auta, ktorý ešte nie je v zozname."
+              notification_id: ev_vehicle_add
+
+  # ===== PRIDAŤ: načítať hodnoty z vlepených e-mailov =====
+  ev_manual_parse:
+    alias: "EV Manuál - Načítať z e-mailu"
+    icon: mdi:email-search
+    sequence:
+      # --- dátum = dnes (automaticky pri každom načítaní) ---
+      - service: input_datetime.set_datetime
+        target: { entity_id: input_datetime.ev_madd_date }
+        data: { date: "{{ now().strftime('%Y-%m-%d') }}" }
+      # --- z KONCOVÉHO e-mailu: energia (Charged), SOC koniec, odometer koniec ---
+      - if:
+          - condition: template
+            value_template: "{{ states('input_text.ev_madd_email_end') | trim != '' }}"
+        then:
+          - service: input_number.set_value
+            target: { entity_id: input_number.ev_madd_energy }
+            data:
+              value: >
+                {% set e = states('input_text.ev_madd_email_end') %}
+                {% set m = e | regex_findall('Charged:\s*([\d.]+)') %}
+                {{ m[0] | float(0) if m else states('input_number.ev_madd_energy') }}
+          - service: input_number.set_value
+            target: { entity_id: input_number.ev_madd_soc_end }
+            data:
+              value: >
+                {% set e = states('input_text.ev_madd_email_end') %}
+                {% set m = e | regex_findall('SOC:\s*([\d.]+)') %}
+                {{ m[0] | float(0) | round(0) | int if m else states('input_number.ev_madd_soc_end') }}
+          - service: input_number.set_value
+            target: { entity_id: input_number.ev_madd_odo_end }
+            data:
+              value: >
+                {% set e = states('input_text.ev_madd_email_end') %}
+                {% set m = e | regex_findall('ODO:\s*([\d.]+)') %}
+                {% set s = states('input_text.ev_madd_email_start') %}
+                {% set m2 = s | regex_findall('ODO:\s*([\d.]+)') %}
+                {{ m[0] | float(0) | round(0) | int if m else (m2[0] | float(0) | round(0) | int if m2 else states('input_number.ev_madd_odo_end')) }}
+      # --- zo ŠTARTOVÉHO e-mailu: SOC štart (odometer sa berie len raz — z konca, fallback štart) ---
+      - if:
+          - condition: template
+            value_template: "{{ states('input_text.ev_madd_email_start') | trim != '' }}"
+        then:
+          - if:
+              - condition: template
+                value_template: "{{ states('input_text.ev_madd_email_end') | trim == '' }}"
+            then:
+              - service: input_number.set_value
+                target: { entity_id: input_number.ev_madd_odo_end }
+                data:
+                  value: >
+                    {% set s = states('input_text.ev_madd_email_start') %}
+                    {% set m = s | regex_findall('ODO:\s*([\d.]+)') %}
+                    {{ m[0] | float(0) | round(0) | int if m else states('input_number.ev_madd_odo_end') }}
+          - service: input_number.set_value
+            target: { entity_id: input_number.ev_madd_soc_start }
+            data:
+              value: >
+                {% set e = states('input_text.ev_madd_email_start') %}
+                {% set m = e | regex_findall('SOC:\s*([\d.]+)') %}
+                {{ m[0] | float(0) | round(0) | int if m else states('input_number.ev_madd_soc_start') }}
+      # --- AC/DC: "Performance" v e-maile → DC, inak AC ---
+      - service: input_select.select_option
+        target: { entity_id: input_select.ev_madd_charge_type }
+        data:
+          option: >
+            {% set a = states('input_text.ev_madd_email_start') %}
+            {% set b = states('input_text.ev_madd_email_end') %}
+            {% if 'Performance' in (a ~ ' ' ~ b) %}DC{% else %}AC{% endif %}
+      - service: persistent_notification.create
+        data:
+          title: "📧 EV Manuál — načítané"
+          message: >
+            Energia: {{ states('input_number.ev_madd_energy') }} kWh ·
+            {{ states('input_select.ev_madd_charge_type') }} ·
+            SOC {{ states('input_number.ev_madd_soc_start') | int }}→{{ states('input_number.ev_madd_soc_end') | int }} % ·
+            ODO {{ states('input_number.ev_madd_odo_end') | int }} km.
+            Dátum nastavený na dnes. Doplň čas (Štart/Koniec), cenu a poskytovateľa, potom Uložiť.
+          notification_id: ev_manual_parse
+
+  # ===== PRIDAŤ: uložiť externú session =====
+  ev_manual_save:
+    alias: "EV Manuál - Uložiť session"
+    icon: mdi:content-save-plus
+    sequence:
+      - variables:
+          d: "{{ states('input_datetime.ev_madd_date') }}"
+          st: "{{ states('input_datetime.ev_madd_start') }}"
+          et: "{{ states('input_datetime.ev_madd_end') }}"
+          energy: "{{ states('input_number.ev_madd_energy') | float(0) | round(3) }}"
+          cost: "{{ states('input_number.ev_madd_cost') | float(0) | round(2) }}"
+          user: "{{ states('input_select.ev_madd_vehicle') }}"
+          socs: "{{ states('input_number.ev_madd_soc_start') | int(0) }}"
+          soce: "{{ states('input_number.ev_madd_soc_end') | int(0) }}"
+          odoe: "{{ states('input_number.ev_madd_odo_end') | int(0) }}"
+          ctype: "{{ states('input_select.ev_madd_charge_type') }}"
+          prov: "{{ states('input_select.ev_madd_provider') }}"
+          note: >-
+            {{ states('input_text.ev_madd_comment') | regex_replace('[\r\n\t"\\\\]', ' ') | trim if states('input_text.ev_madd_comment') not in ['unknown','unavailable'] else '' }}
+      - if:
+          - condition: template
+            value_template: "{{ energy | float(0) > 0 and d not in ['unknown','unavailable',''] }}"
+        then:
+          - variables:
+              end_date: >
+                {% if et >= st %}{{ d }}{% else %}{{ (as_timestamp(d ~ ' 00:00:00') + 86400) | timestamp_custom('%Y-%m-%d', true) }}{% endif %}
+          - variables:
+              start_dt: "{{ d }} {{ st }}"
+              end_dt: "{{ end_date }} {{ et }}"
+              cmin: "{{ ((as_timestamp(end_date ~ ' ' ~ et) - as_timestamp(d ~ ' ' ~ st)) / 60) | round(0) | int }}"
+              avg: "{{ (cost | float(0) / energy | float(0)) | round(4) if energy | float(0) > 0 else 0 }}"
+              sid: "{{ d | replace('-','') }}_{{ st[:5] | replace(':','') }}{{ now().strftime('%S') }}"
+              socs_s: "{{ socs if socs | int(0) > 0 else '' }}"
+              soce_s: "{{ soce if soce | int(0) > 0 else '' }}"
+              odoe_s: "{{ odoe if odoe | int(0) > 0 else '' }}"
+          - variables:
+              row: >
+                {{ [sid, start_dt, end_dt, user, energy, cmin, cost, avg,
+                    0, energy, 0, 0, 0, 0, 0,
+                    socs_s, soce_s, '', odoe_s, 'manual_ext', ctype, prov, note] | join(',') }}
+          - service: shell_command.ev_manual_add
+            data:
+              row: "{{ row }}"
+          - delay: { milliseconds: 500 }
+          - service: homeassistant.update_entity
+            target: { entity_id: sensor.ev_sessions_table }
+          - service: persistent_notification.create
+            data:
+              title: "✅ EV Manuál — session uložená"
+              message: >
+                {{ start_dt }} → {{ end_dt }} · {{ user }} · {{ ctype }} · {{ prov }} ·
+                {{ energy }} kWh · {{ cost }} € ({{ avg }} €/kWh) · {{ cmin }} min
+              notification_id: ev_manual_save
+          # vyčisti vstupy (dátum/čas/auto ostávajú)
+          - service: input_number.set_value
+            target:
+              entity_id:
+                - input_number.ev_madd_energy
+                - input_number.ev_madd_cost
+                - input_number.ev_madd_soc_start
+                - input_number.ev_madd_soc_end
+                - input_number.ev_madd_odo_end
+            data: { value: 0 }
+          - service: input_text.set_value
+            target: { entity_id: input_text.ev_madd_comment }
+            data: { value: "" }
+          - service: input_text.set_value
+            target: { entity_id: input_text.ev_madd_email_start }
+            data: { value: "" }
+          - service: input_text.set_value
+            target: { entity_id: input_text.ev_madd_email_end }
+            data: { value: "" }
+        else:
+          - service: persistent_notification.create
+            data:
+              title: "⚠️ EV Manuál"
+              message: "Zadaj energiu (kWh) > 0 a platný dátum, potom Uložiť."
+              notification_id: ev_manual_save
+
+  # ===== UPRAVIŤ: uložiť zmeny (replace) =====
+  ev_edit_save:
+    alias: "EV Edit - Uložiť zmeny"
+    icon: mdi:content-save-edit
+    sequence:
+      - variables:
+          oid: "{{ states('input_text.ev_edit_id') }}"
+          d: "{{ states('input_datetime.ev_edit_date') }}"
+          st: "{{ states('input_datetime.ev_edit_start') }}"
+          et: "{{ states('input_datetime.ev_edit_end') }}"
+          energy: "{{ states('input_number.ev_edit_energy') | float(0) | round(3) }}"
+          cost: "{{ states('input_number.ev_edit_cost') | float(0) | round(2) }}"
+          user: "{{ states('input_select.ev_edit_vehicle') }}"
+          socs: "{{ states('input_number.ev_edit_soc_start') | int(0) }}"
+          soce: "{{ states('input_number.ev_edit_soc_end') | int(0) }}"
+          odoe: "{{ states('input_number.ev_edit_odo_end') | int(0) }}"
+          solar: "{{ states('input_number.ev_edit_solar_kwh') | float(0) | round(3) }}"
+          grid: "{{ states('input_number.ev_edit_grid_kwh') | float(0) | round(3) }}"
+          t1: "{{ states('input_number.ev_edit_t1_kwh') | float(0) | round(3) }}"
+          t2: "{{ states('input_number.ev_edit_t2_kwh') | float(0) | round(3) }}"
+          t3: "{{ states('input_number.ev_edit_t3_kwh') | float(0) | round(3) }}"
+          t4: "{{ states('input_number.ev_edit_t4_kwh') | float(0) | round(3) }}"
+          reason: "{{ states('input_text.ev_edit_stop_reason') or 'manual' }}"
+          ctype: "{{ states('input_select.ev_edit_charge_type') }}"
+          prov: "{{ states('input_select.ev_edit_provider') }}"
+          note: >-
+            {{ states('input_text.ev_edit_comment') | regex_replace('[\r\n\t"\\\\]', ' ') | trim if states('input_text.ev_edit_comment') not in ['unknown','unavailable'] else '' }}
+      - if:
+          - condition: template
+            value_template: "{{ oid not in ['unknown','unavailable',''] and energy | float(0) > 0 }}"
+        then:
+          - variables:
+              end_date: >
+                {% if et >= st %}{{ d }}{% else %}{{ (as_timestamp(d ~ ' 00:00:00') + 86400) | timestamp_custom('%Y-%m-%d', true) }}{% endif %}
+          - variables:
+              start_dt: "{{ d }} {{ st }}"
+              end_dt: "{{ end_date }} {{ et }}"
+              cmin: "{{ ((as_timestamp(end_date ~ ' ' ~ et) - as_timestamp(d ~ ' ' ~ st)) / 60) | round(0) | int }}"
+              avg: "{{ (cost | float(0) / energy | float(0)) | round(4) if energy | float(0) > 0 else 0 }}"
+              spct: "{{ (solar | float(0) / energy | float(0) * 100) | round(0) | int if energy | float(0) > 0 else 0 }}"
+              socs_s: "{{ socs if socs | int(0) > 0 else '' }}"
+              soce_s: "{{ soce if soce | int(0) > 0 else '' }}"
+              odoe_s: "{{ odoe if odoe | int(0) > 0 else '' }}"
+          - variables:
+              row: >
+                {{ [oid, start_dt, end_dt, user, energy, cmin, cost, avg,
+                    solar, grid, spct, t1, t2, t3, t4,
+                    socs_s, soce_s, '', odoe_s, reason, ctype, prov, note] | join(',') }}
+          - service: shell_command.ev_replace_session
+            data:
+              old_id: "{{ oid }}"
+              row: "{{ row }}"
+          - delay: { milliseconds: 500 }
+          - service: homeassistant.update_entity
+            target: { entity_id: sensor.ev_sessions_table }
+          - service: persistent_notification.create
+            data:
+              title: "✅ EV Edit — zmeny uložené"
+              message: >
+                {{ oid }} → {{ user }} · {{ start_dt }} · {{ energy }} kWh · {{ cost }} €
+              notification_id: ev_edit_save
+          - service: input_select.select_option
+            target: { entity_id: input_select.ev_edit_session }
+            data: { option: "— vyber session —" }
+          - service: input_text.set_value
+            target: { entity_id: input_text.ev_edit_id }
+            data: { value: "" }
+        else:
+          - service: persistent_notification.create
+            data:
+              title: "⚠️ EV Edit"
+              message: "Najprv vyber session z výberu a skontroluj energiu (> 0)."
+              notification_id: ev_edit_save
+
+  # ===== UPRAVIŤ: zmazať session =====
+  ev_edit_delete:
+    alias: "EV Edit - Zmazať session"
+    icon: mdi:trash-can
+    sequence:
+      - variables:
+          oid: "{{ states('input_text.ev_edit_id') }}"
+      - if:
+          - condition: template
+            value_template: "{{ oid not in ['unknown','unavailable',''] }}"
+        then:
+          - service: shell_command.ev_delete_session
+            data:
+              session_id: "{{ oid }}"
+          - delay: { milliseconds: 500 }
+          - service: homeassistant.update_entity
+            target: { entity_id: sensor.ev_sessions_table }
+          - service: persistent_notification.create
+            data:
+              title: "🗑️ EV Edit — zmazané"
+              message: "Session {{ oid }} bola zmazaná z CSV."
+              notification_id: ev_edit_delete
+          - service: input_select.select_option
+            target: { entity_id: input_select.ev_edit_session }
+            data: { option: "— vyber session —" }
+          - service: input_text.set_value
+            target: { entity_id: input_text.ev_edit_id }
+            data: { value: "" }
+        else:
+          - service: persistent_notification.create
+            data:
+              title: "⚠️ EV Edit"
+              message: "Najprv vyber session, ktorú chceš zmazať."
+              notification_id: ev_edit_delete
+
+# --------------------------------------------------
+# AUTOMATIZÁCIE
+# --------------------------------------------------
+automation:
+  # ===== Po štarte HA obnov pridané autá (input_select.set_options sa reštartom stratí) =====
+  - id: ev_vehicles_restore
+    alias: "EV - Obnoviť zoznam áut po štarte"
+    mode: single
+    trigger:
+      - platform: homeassistant
+        event: start
+    action:
+      - variables:
+          e: "{{ states('input_text.ev_vehicles_extra') }}"
+          base: "{{ ['mysan', 'vojtesla', 'Petschka', 'Hosť'] }}"
+          opts: >-
+            {% set ns = namespace(o=['mysan', 'vojtesla', 'Petschka', 'Hosť']) %}
+            {% for v in (e.split(',') if e not in ['', 'unknown', 'unavailable'] else []) %}
+            {% if v | trim and (v | trim) not in ns.o %}{% set ns.o = ns.o + [v | trim] %}{% endif %}
+            {% endfor %}
+            {{ ns.o }}
+      - condition: template
+        value_template: "{{ opts | length > 4 }}"
+      - service: input_select.set_options
+        target: { entity_id: input_select.ev_vehicle }
+        data: { options: "{{ opts }}" }
+      - service: input_select.set_options
+        target: { entity_id: input_select.ev_madd_vehicle }
+        data: { options: "{{ opts }}" }
+      - service: input_select.set_options
+        target: { entity_id: input_select.ev_edit_vehicle }
+        data: { options: "{{ opts }}" }
+
+  # ===== Napĺňanie edit pickeru + zoznamu áut zo sensor.ev_sessions_table =====
+  - id: ev_edit_populate
+    alias: "EV Edit - Naplniť výber session"
+    mode: queued
+    trigger:
+      - platform: state
+        entity_id: sensor.ev_sessions_table
+        attribute: sessions
+      - platform: homeassistant
+        event: start
+    action:
+      - delay: { seconds: 1 }
+      - variables:
+          ss: "{{ state_attr('sensor.ev_sessions_table','sessions') or [] }}"
+      - variables:
+          opts: >
+            {% set ns = namespace(o=['— vyber session —']) %}
+            {% for s in ss %}
+            {% set ns.o = ns.o + [ s.date ~ ' ' ~ s.time ~ ' · ' ~ (s.user | default('?')) ~ ' · ' ~ (s.energy_kwh) ~ 'kWh · ' ~ (s.cost_eur) ~ '€ #' ~ s.session_id ] %}
+            {% endfor %}
+            {{ ns.o }}
+          vopts: >
+            {% set base = state_attr('input_select.ev_vehicle','options') or [] %}
+            {% set ns = namespace(o=base) %}
+            {% for v in (ss | map(attribute='user') | list) %}
+            {% if v and v not in ns.o %}{% set ns.o = ns.o + [v] %}{% endif %}
+            {% endfor %}
+            {{ ns.o }}
+          provopts: >
+            {% set base = state_attr('input_select.ev_madd_provider','options') or [] %}
+            {% set datap = state_attr('sensor.ev_sessions_table','providers') or [] %}
+            {% set ns = namespace(o=base) %}
+            {% for p in datap %}
+            {% if p and p not in ns.o %}{% set ns.o = ns.o + [p] %}{% endif %}
+            {% endfor %}
+            {{ ns.o }}
+      - if:
+          - condition: template
+            value_template: "{{ opts != (state_attr('input_select.ev_edit_session','options') or []) }}"
+        then:
+          - service: input_select.set_options
+            target: { entity_id: input_select.ev_edit_session }
+            data: { options: "{{ opts }}" }
+      - if:
+          - condition: template
+            value_template: "{{ vopts != (state_attr('input_select.ev_edit_vehicle','options') or []) }}"
+        then:
+          - service: input_select.set_options
+            target: { entity_id: input_select.ev_edit_vehicle }
+            data: { options: "{{ vopts }}" }
+      - if:
+          - condition: template
+            value_template: "{{ provopts != (state_attr('input_select.ev_madd_provider','options') or []) }}"
+        then:
+          - service: input_select.set_options
+            target: { entity_id: input_select.ev_madd_provider }
+            data: { options: "{{ provopts }}" }
+      - if:
+          - condition: template
+            value_template: "{{ provopts != (state_attr('input_select.ev_edit_provider','options') or []) }}"
+        then:
+          - service: input_select.set_options
+            target: { entity_id: input_select.ev_edit_provider }
+            data: { options: "{{ provopts }}" }
+
+  # ===== Po výbere session → načítaj polia do edit formulára =====
+  - id: ev_edit_load
+    alias: "EV Edit - Načítať vybranú session"
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: input_select.ev_edit_session
+    condition:
+      - condition: template
+        value_template: "{{ '#' in (trigger.to_state.state | default('')) }}"
+    action:
+      - variables:
+          sid: "{{ trigger.to_state.state.split('#')[-1] | trim }}"
+      - variables:
+          s0: "{{ (state_attr('sensor.ev_sessions_table','sessions') or []) | selectattr('session_id','equalto', sid) | list | first }}"
+      - if:
+          - condition: template
+            value_template: "{{ s0 is mapping }}"
+        then:
+          - service: input_text.set_value
+            target: { entity_id: input_text.ev_edit_id }
+            data: { value: "{{ sid }}" }
+          - service: input_datetime.set_datetime
+            target: { entity_id: input_datetime.ev_edit_date }
+            data: { date: "{{ s0.start[:10] }}" }
+          - service: input_datetime.set_datetime
+            target: { entity_id: input_datetime.ev_edit_start }
+            data: { time: "{{ s0.start[11:19] if s0.start | length >= 19 else '00:00:00' }}" }
+          - service: input_datetime.set_datetime
+            target: { entity_id: input_datetime.ev_edit_end }
+            data: { time: "{{ s0.end[11:19] if (s0.end and s0.end | length >= 19) else '00:00:00' }}" }
+          - service: input_number.set_value
+            target: { entity_id: input_number.ev_edit_energy }
+            data: { value: "{{ s0.energy_kwh | float(0) }}" }
+          - service: input_number.set_value
+            target: { entity_id: input_number.ev_edit_cost }
+            data: { value: "{{ s0.cost_eur | float(0) }}" }
+          - service: input_number.set_value
+            target: { entity_id: input_number.ev_edit_soc_start }
+            data: { value: "{{ s0.soc_start | int(0) }}" }
+          - service: input_number.set_value
+            target: { entity_id: input_number.ev_edit_soc_end }
+            data: { value: "{{ s0.soc_end | int(0) }}" }
+          - service: input_number.set_value
+            target: { entity_id: input_number.ev_edit_odo_end }
+            data: { value: "{{ (s0.odo_end | int(0)) or (s0.odo_start | int(0)) }}" }
+          - service: input_text.set_value
+            target: { entity_id: input_text.ev_edit_comment }
+            data: { value: "{{ s0.comment | default('') }}" }
+          - service: input_number.set_value
+            target: { entity_id: input_number.ev_edit_solar_kwh }
+            data: { value: "{{ s0.solar_kwh | float(0) }}" }
+          - service: input_number.set_value
+            target: { entity_id: input_number.ev_edit_grid_kwh }
+            data: { value: "{{ s0.grid_kwh | float(0) }}" }
+          - service: input_number.set_value
+            target: { entity_id: input_number.ev_edit_t1_kwh }
+            data: { value: "{{ s0.t1_kwh | float(0) }}" }
+          - service: input_number.set_value
+            target: { entity_id: input_number.ev_edit_t2_kwh }
+            data: { value: "{{ s0.t2_kwh | float(0) }}" }
+          - service: input_number.set_value
+            target: { entity_id: input_number.ev_edit_t3_kwh }
+            data: { value: "{{ s0.t3_kwh | float(0) }}" }
+          - service: input_number.set_value
+            target: { entity_id: input_number.ev_edit_t4_kwh }
+            data: { value: "{{ s0.t4_kwh | float(0) }}" }
+          - service: input_select.select_option
+            target: { entity_id: input_select.ev_edit_vehicle }
+            data: { option: "{{ s0.user }}" }
+          - service: input_select.select_option
+            target: { entity_id: input_select.ev_edit_charge_type }
+            data:
+              option: >
+                {% set c = (s0.charge_type | default('AC') | upper) %}{{ c if c in ['AC','DC'] else 'AC' }}
+          - service: input_select.select_option
+            target: { entity_id: input_select.ev_edit_provider }
+            data: { option: "{{ s0.provider | default('Home') or 'Home' }}" }
+          - service: input_text.set_value
+            target: { entity_id: input_text.ev_edit_stop_reason }
+            data: { value: "{{ s0.stop_reason | default('manual') }}" }
