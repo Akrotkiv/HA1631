@@ -486,6 +486,8 @@ views:
           - type: divider
           - entity: input_boolean.ev_solar_ignore_skip
             name: Solar ignoruje vynechanie
+          - entity: input_boolean.ev_ignore_skip_once
+            name: Jednorazovo ignorovať (do odpojenia)
 
       # --- Manuál & diagnostika ---
       - type: entities
